@@ -10,7 +10,9 @@ using namespace cv;
 using namespace std;
 
 Mat getHistogram(Mat& image, int quantum) {
-    Mat dest(100, (256 / quantum) * image.channels(), CV_32FC1, cvScalar(255));
+    int numBins = 256/quantum;
+
+    Mat dest(100, numBins * image.channels(), CV_32FC1, cvScalar(255));
     map<int, float> bins = map<int, float>();
 
     float maxcol = 0;
@@ -28,7 +30,7 @@ Mat getHistogram(Mat& image, int quantum) {
             Vec3b col = image.at<Vec3b>(i, j);
             for (int k = 0; k < image.channels(); k++) {
                 int illumination = col.val[k];
-                int bin = (256 * k) + (illumination / quantum);
+                int bin = (numBins * k) + (illumination / quantum);
                 bins[bin] += 1.0f;
                 sumofall += 1.0;
                 maxcol = max(maxcol, bins[bin]);
@@ -39,18 +41,16 @@ Mat getHistogram(Mat& image, int quantum) {
 
     for(auto it = bins.begin(); it != bins.end(); ++it) {
         it->second /= sumofall;
-        //fprintf(stderr, "%d - %f\n", it->first, it->second);
     }
 
-    Mat dzt(500, (256 / quantum) * image.channels(), CV_8UC3, cvScalar(255, 255, 255));
+    Mat dzt(500, numBins * image.channels(), CV_8UC3, cvScalar(255, 255, 255));
     fprintf(stderr, "%d\n", dest.cols);
     for (int i = 0; i < dest.cols-1; i++) {
         float scalar = (float)dzt.rows / maxcol;
         float mult = dzt.rows - scalar*(bins[i] * sumofall);
         float mult2 = dzt.rows - scalar*(bins[i+1] * sumofall);
 
-        fprintf(stderr, "%f\n", mult);
-        Vec3b newcol(((i / 256) == 0) ? 255 : 0, ((i / 256) == 1) ? 255 : 0, ((i / 256) == 2) ? 255 : 0);
+        Vec3b newcol(((i / numBins) == 0) ? 255 : 0, ((i / numBins) == 1) ? 255 : 0, ((i / numBins) == 2) ? 255 : 0);
         line(dzt, Point(i, mult), Point(i+1, mult2), Scalar(newcol), 2, 8, 0);
 
        // dzt.at<Vec3b>((int)mult, i) = newcol;
@@ -60,7 +60,7 @@ Mat getHistogram(Mat& image, int quantum) {
     return dzt;
 }
 
-int getdir (string dir, vector<string> &files, int lvl)
+int getdir (string dir, map<string, vector<string>> &files, string category)
 {
     DIR *dp;
     struct stat statbuff;
@@ -79,18 +79,14 @@ int getdir (string dir, vector<string> &files, int lvl)
             if (strcmp(dirp->d_name, ".") == 0 || strcmp(dirp->d_name, "..") == 0)
                 continue;
 
-            //char filedir[1024];
-            //sprintf(filedir, "%*s[%s]", lvl*2, "", dirp->d_name);
-            //printf("%*s[%s]\n", lvl, "", dirp->d_name);
-            //files.push_back(string(filedir));
-            files.push_back(string(path));
-            getdir(path, files, lvl++);
+            getdir(path, files, string(dirp->d_name));
 
         }
         else {
-            char filedir[1024];
-            sprintf(filedir, "%s/%s", dir.c_str(), dirp->d_name);
-            files.push_back(string(filedir));
+            if (strcmp(category.c_str(), ".") == 0)
+                continue;
+
+            files[category].push_back(string(dirp->d_name));
         }
     }
     closedir(dp);
@@ -100,20 +96,22 @@ int getdir (string dir, vector<string> &files, int lvl)
 int main(int argc, char** argv )
 {
     string dir = string(".");
-    vector<string> files = vector<string>();
+    map<string, vector<string>> files = map<string, vector<string>>();
 
-    getdir(dir,files, 0);
+    getdir(dir,files, ".");
 
-    //for (unsigned int i = 0;i < files.size();i++) {
-    //    cout << files[i] << endl;
-    //}
-
+    for (auto it = files.begin(); it != files.end(); ++it) {
+        printf("%s \n", it->first.c_str());
+        for (auto itvec = it->second.begin(); itvec != it->second.end(); itvec++) {
+            printf(" - %s\n", itvec->c_str());
+        }
+    }
     Mat image;
     image = imread( "lena.jpg", 1 );
 
 
     namedWindow("Display Image", CV_WINDOW_AUTOSIZE );
-    Mat result = getHistogram(image, 1);
+    Mat result = getHistogram(image, 2);
     imshow("Display Image", result);
     waitKey(0);
 
