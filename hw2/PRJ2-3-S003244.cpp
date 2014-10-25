@@ -3,16 +3,19 @@
 #include <iostream>
 #include <stdio.h>
 #include <dirent.h>
-#include <sys/stat.h>
 
 
 using namespace cv;
 using namespace std;
 
+
+map<string, vector<Mat>> trainingSet = map<string, vector<Mat>>();
+map<string, vector<Mat>> testSet = map<string, vector<Mat>>();
+
 Mat getHistogram(Mat& image, int quantum) {
     int numBins = 256/quantum;
 
-    Mat dest(100, numBins * image.channels(), CV_32FC1, cvScalar(255));
+    Mat dest(1, numBins * image.channels(), CV_32FC1, cvScalar(255));
     map<int, float> bins = map<int, float>();
 
     float maxcol = 0;
@@ -43,27 +46,46 @@ Mat getHistogram(Mat& image, int quantum) {
         it->second /= sumofall;
     }
 
-    Mat dzt(500, numBins * image.channels(), CV_8UC3, cvScalar(255, 255, 255));
-    fprintf(stderr, "%d\n", dest.cols);
+    //Mat dzt(500, numBins * image.channels(), CV_8UC3, cvScalar(255, 255, 255));
     for (int i = 0; i < dest.cols-1; i++) {
+        /* for testing purposes
         float scalar = (float)dzt.rows / maxcol;
         float mult = dzt.rows - scalar*(bins[i] * sumofall);
         float mult2 = dzt.rows - scalar*(bins[i+1] * sumofall);
 
         Vec3b newcol(((i / numBins) == 0) ? 255 : 0, ((i / numBins) == 1) ? 255 : 0, ((i / numBins) == 2) ? 255 : 0);
-        line(dzt, Point(i, mult), Point(i+1, mult2), Scalar(newcol), 2, 8, 0);
+        line(dzt, Point(i, mult), Point(i+1, mult2), Scalar(newcol), 2, 8, 0);*/
 
-       // dzt.at<Vec3b>((int)mult, i) = newcol;
-       // dest.at<float>(mult, i) = bins[i];
-
+        dest.at<float>(0, i) = bins[i];
     }
-    return dzt;
+    return dest;
 }
 
-int getdir (string dir, map<string, vector<string>> &files, string category)
+int getNumOfJPG(string dir) {
+    int len;
+    struct dirent *pdir;
+    DIR *pDir;
+    int count = 0;
+
+    pDir = opendir(dir.c_str());
+    if (pDir != NULL) {
+        while ((pdir = readdir(pDir)) != NULL) {
+            len = strlen(pdir->d_name);
+            if (len >= 4) {
+                if (strcmp(".jpg", &(pdir->d_name[len - 4])) == 0) {
+                    count++;
+                }
+            }
+        }
+    }
+    closedir (pDir);
+
+    return count;
+}
+
+int getdir (string dir, map<string, vector<Mat>> &trainingFiles, map<string, vector<Mat>> &testFiles, string category, int count)
 {
     DIR *dp;
-    struct stat statbuff;
     struct dirent *dirp;
     if((dp = opendir(dir.c_str())) == NULL) {
         //cout << "Error(" << errno << ") opening " << dir << endl;
@@ -71,7 +93,6 @@ int getdir (string dir, map<string, vector<string>> &files, string category)
     }
 
     while ((dirp = readdir(dp)) != NULL) {
-        stat(dirp->d_name, &statbuff);
         if (dirp->d_type & DT_DIR) {
             char path[1024];
             int len = snprintf(path, sizeof(path)-1, "%s/%s", dir.c_str(), dirp->d_name);
@@ -79,41 +100,63 @@ int getdir (string dir, map<string, vector<string>> &files, string category)
             if (strcmp(dirp->d_name, ".") == 0 || strcmp(dirp->d_name, "..") == 0)
                 continue;
 
-            getdir(path, files, string(dirp->d_name));
+            getdir(path, trainingFiles, testFiles, string(dirp->d_name), getNumOfJPG(path));
 
         }
         else {
             if (strcmp(category.c_str(), ".") == 0)
                 continue;
 
-            files[category].push_back(string(dirp->d_name));
+            int len = strlen(dirp->d_name);
+
+            if (len >= 4) {
+                if (strcmp(".jpg", dirp->d_name + len - 4) == 0) {
+                    char path[1024];
+                    int len = snprintf(path, sizeof(path)-1, "%s/%s", dir.c_str(), dirp->d_name);
+
+                    Mat histogram = imread(path, 1);
+                    histogram = getHistogram(histogram, 1);
+                    if (trainingFiles[category].size() < count / 2)
+                        trainingFiles[category].push_back(histogram);
+                    else
+                        testFiles[category].push_back(histogram);
+                }
+            }
         }
     }
     closedir(dp);
     return 0;
 }
 
+float intersectHist(Mat& h1, Mat& h2) {
+    float sum = 1.0f;
+
+    for (int i = 0; i < h1.cols; i++) {
+        sum -= min(h1.at<float>(0, i), h2.at<float>(0, i));
+    }
+
+    return sum;
+}
+
 int main(int argc, char** argv )
 {
     string dir = string(".");
-    map<string, vector<string>> files = map<string, vector<string>>();
 
-    getdir(dir,files, ".");
-
-    for (auto it = files.begin(); it != files.end(); ++it) {
-        printf("%s \n", it->first.c_str());
-        for (auto itvec = it->second.begin(); itvec != it->second.end(); itvec++) {
-            printf(" - %s\n", itvec->c_str());
-        }
-    }
-    Mat image;
-    image = imread( "lena.jpg", 1 );
-
+    getdir(dir, trainingSet, testSet, ".", 0);
 
     namedWindow("Display Image", CV_WINDOW_AUTOSIZE );
-    Mat result = getHistogram(image, 2);
-    imshow("Display Image", result);
-    waitKey(0);
+    for (auto it = trainingSet.begin(); it != trainingSet.end(); ++it) {
+        printf("%s -- %d\n", it->first.c_str(), it->second.size());
+        for (auto itvec = it->second.begin(); itvec != it->second.end(); itvec++) {
+
+        }
+    }
+    /*Mat image;
+    image = imread( "lena.jpg", 1 );*/
+
+
+    //Mat result = getHistogram(image, 1);
+    //waitKey(0);
 
 
     return 0;
