@@ -2,70 +2,56 @@
 #include <opencv2/opencv.hpp>
 #include <iostream>
 #include <stdio.h>
-
+#include <dirent.h>
+#include <sys/stat.h>
 
 
 using namespace cv;
+using namespace std;
 
+int getdir (string dir, vector<string> &files)
+{
+    DIR *dp;
+    struct stat statbuff;
+    struct dirent *dirp;
+    if((dp = opendir(dir.c_str())) == NULL) {
+        cout << "Error(" << errno << ") opening " << dir << endl;
+        return errno;
+    }
 
+    while ((dirp = readdir(dp)) != NULL) {
+        if (strcmp(dirp->d_name, ".") == 0 || strcmp(dirp->d_name, "..") == 0)
+            continue;
+        stat(dirp->d_name, &statbuff);
+
+        //if (S_ISDIR(statbuff.st_mode))
+          //  continue;
+        files.push_back(string(dirp->d_name));
+    }
+    closedir(dp);
+    return 0;
+}
 
 int main(int argc, char** argv )
 {
-    if (argc != 4) {
-        fprintf(stderr, "Usage: [inputfilename] [filter.csv] [outputfilename]\n");
-        return 0;
+    string dir = string(".");
+    vector<string> files = vector<string>();
+
+    getdir(dir,files);
+
+    for (unsigned int i = 0;i < files.size();i++) {
+        cout << files[i] << endl;
     }
 
-    Mat image;
-    image = imread( argv[1], 1 );
+    //Mat image;
+    //image = imread( argv[1], 1 );
 
-    // Read the CSV
-    CvMLData mlData;
-    mlData.read_csv(argv[2]);
-    Mat filter(mlData.get_values(), true);
 
     namedWindow("Display Image", CV_WINDOW_AUTOSIZE );
 
-    if ( !image.data )
-    {
-        // Not found or not an image, maybe a video?
+    //imshow("Display Image", result);
+    waitKey(0);
 
-        VideoCapture video(argv[1]);
-
-        if (video.isOpened()) {
-            fprintf(stderr, "Warning: If you haven\'t compiled OpenCV with a codec, video functionality may not work.\n");
-
-            // Create a video writer using MPEG codec.
-            Size size = Size(video.get(CV_CAP_PROP_FRAME_WIDTH),video.get(CV_CAP_PROP_FRAME_HEIGHT));
-            VideoWriter writer(argv[3], CV_FOURCC('M','P','E','G'), video.get(CV_CAP_PROP_FPS), size);
-
-
-            // Read the video frame by frame and write processed one
-            while(true) {
-                Mat frame;
-                if (video.read(frame)) {
-                    Mat res = applyFilter(frame, filter);
-                    imshow("Display Image", res);
-                    waitKey(1);
-                    writer.write(res);
-                }
-                else {
-                    break;
-                }
-            }
-        }
-        else {
-            fprintf(stderr, "No image data or video \n");
-            return -1;
-        }
-    }
-    else {
-        // Image found, filter it and write.
-        Mat result = applyFilter(image, filter);
-        imshow("Display Image", result);
-        imwrite(argv[3], result);
-        waitKey(0);
-    }
 
     return 0;
 }
