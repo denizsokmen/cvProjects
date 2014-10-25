@@ -1,0 +1,8 @@
+cmake_minimum_required(VERSION 2.8.4)
+project(PRJ2_3_S003244)
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
+set(SOURCE_FILES PRJ2-3-S003244.cpp)
+include_directories(${OpenCV_INCLUDE_DIRS})
+add_executable(PRJ2-3-S003244 PRJ2-3-S003244.cpp)
+find_package( OpenCV REQUIRED )
+target_link_libraries(PRJ2-3-S003244 ${OpenCV_LIBS} )
