@@ -9,6 +9,57 @@
 using namespace cv;
 using namespace std;
 
+Mat getHistogram(Mat& image, int quantum) {
+    Mat dest(100, (256 / quantum) * image.channels(), CV_32FC1, cvScalar(255));
+    map<int, float> bins = map<int, float>();
+
+    float maxcol = 0;
+    float mincol = 0;
+
+    double sumofall = 0.0;
+    for (int i = 0; i < dest.cols; i++) {
+        bins[i] = 0.0f;
+    }
+
+
+
+    for (int i = 0; i < image.rows; i++) {
+        for (int j = 0; j < image.cols; j++) {
+            Vec3b col = image.at<Vec3b>(i, j);
+            for (int k = 0; k < image.channels(); k++) {
+                int illumination = col.val[k];
+                int bin = (256 * k) + (illumination / quantum);
+                bins[bin] += 1.0f;
+                sumofall += 1.0;
+                maxcol = max(maxcol, bins[bin]);
+                mincol = min(mincol, bins[bin]);
+            }
+        }
+    }
+
+    for(auto it = bins.begin(); it != bins.end(); ++it) {
+        it->second /= sumofall;
+        //fprintf(stderr, "%d - %f\n", it->first, it->second);
+    }
+
+    Mat dzt(500, (256 / quantum) * image.channels(), CV_8UC3, cvScalar(255, 255, 255));
+    fprintf(stderr, "%d\n", dest.cols);
+    for (int i = 0; i < dest.cols-1; i++) {
+        float scalar = (float)dzt.rows / maxcol;
+        float mult = dzt.rows - scalar*(bins[i] * sumofall);
+        float mult2 = dzt.rows - scalar*(bins[i+1] * sumofall);
+
+        fprintf(stderr, "%f\n", mult);
+        Vec3b newcol(((i / 256) == 0) ? 255 : 0, ((i / 256) == 1) ? 255 : 0, ((i / 256) == 2) ? 255 : 0);
+        line(dzt, Point(i, mult), Point(i+1, mult2), Scalar(newcol), 2, 8, 0);
+
+       // dzt.at<Vec3b>((int)mult, i) = newcol;
+       // dest.at<float>(mult, i) = bins[i];
+
+    }
+    return dzt;
+}
+
 int getdir (string dir, vector<string> &files, int lvl)
 {
     DIR *dp;
@@ -53,17 +104,17 @@ int main(int argc, char** argv )
 
     getdir(dir,files, 0);
 
-    for (unsigned int i = 0;i < files.size();i++) {
-        cout << files[i] << endl;
-    }
+    //for (unsigned int i = 0;i < files.size();i++) {
+    //    cout << files[i] << endl;
+    //}
 
-    //Mat image;
-    //image = imread( argv[1], 1 );
+    Mat image;
+    image = imread( "lena.jpg", 1 );
 
 
     namedWindow("Display Image", CV_WINDOW_AUTOSIZE );
-
-    //imshow("Display Image", result);
+    Mat result = getHistogram(image, 1);
+    imshow("Display Image", result);
     waitKey(0);
 
 
