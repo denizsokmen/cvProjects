@@ -115,7 +115,7 @@ int getdir (string dir, map<string, vector<Mat>> &trainingFiles, map<string, vec
                     int len = snprintf(path, sizeof(path)-1, "%s/%s", dir.c_str(), dirp->d_name);
 
                     Mat histogram = imread(path, 1);
-                    histogram = getHistogram(histogram, 1);
+                    histogram = getHistogram(histogram, 8);
                     if (trainingFiles[category].size() < count / 2)
                         trainingFiles[category].push_back(histogram);
                     else
@@ -129,13 +129,13 @@ int getdir (string dir, map<string, vector<Mat>> &trainingFiles, map<string, vec
 }
 
 float intersectHist(Mat& h1, Mat& h2) {
-    float sum = 1.0f;
+    float sum = 0.0f;
 
     for (int i = 0; i < h1.cols; i++) {
-        sum -= min(h1.at<float>(0, i), h2.at<float>(0, i));
+        sum += (h1.at<float>(0, i) - h2.at<float>(0, i)) * (h1.at<float>(0, i) - h2.at<float>(0, i)) / (h1.at<float>(0, i) + h2.at<float>(0, i));
     }
 
-    return sum;
+    return sum/2;
 }
 
 int main(int argc, char** argv )
@@ -145,18 +145,40 @@ int main(int argc, char** argv )
     getdir(dir, trainingSet, testSet, ".", 0);
 
     namedWindow("Display Image", CV_WINDOW_AUTOSIZE );
-    for (auto it = trainingSet.begin(); it != trainingSet.end(); ++it) {
-        printf("%s -- %d\n", it->first.c_str(), it->second.size());
-        for (auto itvec = it->second.begin(); itvec != it->second.end(); itvec++) {
 
+    float minDist = 1.0f;
+    string minCategory = " ";
+    map<string, vector<string>> results = map<string, vector<string>>();
+
+
+    for (auto testIt = testSet.begin(); testIt != testSet.end(); ++testIt) {
+        for (auto testImg = testIt->second.begin(); testImg != testIt->second.end(); ++testImg) {
+            for (auto it = trainingSet.begin(); it != trainingSet.end(); ++it) {
+                for (auto trainingImg = it->second.begin(); trainingImg != it->second.end(); trainingImg++) {
+                    float res = intersectHist(*trainingImg, *testImg);
+
+                    if (res < minDist) {
+                        minDist = res;
+                        minCategory = it->first;
+                    }
+                }
+            }
+
+            results[minCategory].push_back(testIt->first);
+            minDist = 1.0f;
         }
     }
-    /*Mat image;
-    image = imread( "lena.jpg", 1 );*/
 
-
-    //Mat result = getHistogram(image, 1);
-    //waitKey(0);
+    for (auto testIt = results.begin(); testIt != results.end(); ++testIt) {
+        fprintf(stderr, "%s - ", testIt->first.c_str());
+        int matchedSize = 0;
+        int testSize = testSet[testIt->first].size();
+        for (auto testImg = testIt->second.begin(); testImg != testIt->second.end(); ++testImg) {
+            if (*testImg == testIt->first)
+                matchedSize++;
+        }
+        fprintf(stderr, "%f%\n", (float)100.0f*matchedSize / testSize);
+    }
 
 
     return 0;
