@@ -12,37 +12,47 @@ using namespace std;
 map<string, vector<Mat>> trainingSet = map<string, vector<Mat>>();
 map<string, vector<Mat>> testSet = map<string, vector<Mat>>();
 
-Mat getHistogram(Mat& image, int quantum) {
+Mat getHistogram(Mat& image, int quantum, int grid) {
     int numBins = 256/quantum;
+    int totalBins = image.channels() * numBins;
+    int gridSquare = grid*grid;
 
-    Mat dest(1, numBins * image.channels(), CV_32FC1, cvScalar(255));
+    Mat dest(1, totalBins * gridSquare, CV_32FC1, cvScalar(255));
     map<int, float> bins = map<int, float>();
 
-    float maxcol = 0;
-    float mincol = 0;
+    //float maxcol = 0;
+    //float mincol = 0;
 
+    //double* sumofall = new double[gridSquare];
     double sumofall = 0.0;
+    //fprintf(stderr, "%d\n", dest.cols);
     for (int i = 0; i < dest.cols; i++) {
         bins[i] = 0.0f;
     }
 
 
-
     for (int i = 0; i < image.rows; i++) {
         for (int j = 0; j < image.cols; j++) {
             Vec3b col = image.at<Vec3b>(i, j);
+            int offsetRow = (i-1) / (image.rows / grid);
+            int offsetCol = (j-1) / (image.cols / grid);
+            int offset = offsetRow * grid + offsetCol;
+
+            //fprintf(stderr, "%d - %d (%d)\n", offsetRow, offsetCol, offset);
             for (int k = 0; k < image.channels(); k++) {
                 int illumination = col.val[k];
-                int bin = (numBins * k) + (illumination / quantum);
+                int bin = (totalBins*offset) + (numBins * k) + (illumination / quantum);
                 bins[bin] += 1.0f;
                 sumofall += 1.0;
-                maxcol = max(maxcol, bins[bin]);
-                mincol = min(mincol, bins[bin]);
+                //sumofall[offset] += 1.0;
+                //maxcol = max(maxcol, bins[bin]);
+                //mincol = min(mincol, bins[bin]);
             }
         }
     }
 
     for(auto it = bins.begin(); it != bins.end(); ++it) {
+       // int offset = it->first / totalBins;
         it->second /= sumofall;
     }
 
@@ -68,6 +78,7 @@ int getNumOfJPG(string dir) {
     int count = 0;
 
     pDir = opendir(dir.c_str());
+
     if (pDir != NULL) {
         while ((pdir = readdir(pDir)) != NULL) {
             len = strlen(pdir->d_name);
@@ -115,7 +126,7 @@ int getdir (string dir, map<string, vector<Mat>> &trainingFiles, map<string, vec
                     int len = snprintf(path, sizeof(path)-1, "%s/%s", dir.c_str(), dirp->d_name);
 
                     Mat histogram = imread(path, 1);
-                    histogram = getHistogram(histogram, 8);
+                    histogram = getHistogram(histogram, 1, 2);
                     if (trainingFiles[category].size() < count / 2)
                         trainingFiles[category].push_back(histogram);
                     else
@@ -132,8 +143,10 @@ float intersectHist(Mat& h1, Mat& h2) {
     float sum = 0.0f;
 
     for (int i = 0; i < h1.cols; i++) {
+        fprintf(stderr,"%f - ",h1.at<float>(0, i));
         sum += (h1.at<float>(0, i) - h2.at<float>(0, i)) * (h1.at<float>(0, i) - h2.at<float>(0, i)) / (h1.at<float>(0, i) + h2.at<float>(0, i));
     }
+    fprintf(stderr,"\n");
 
     return sum/2;
 }
@@ -141,7 +154,6 @@ float intersectHist(Mat& h1, Mat& h2) {
 int main(int argc, char** argv )
 {
     string dir = string(".");
-
     getdir(dir, trainingSet, testSet, ".", 0);
 
     namedWindow("Display Image", CV_WINDOW_AUTOSIZE );
