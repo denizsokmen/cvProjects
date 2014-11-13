@@ -20,12 +20,7 @@ Mat getHistogram(Mat& image, int quantum, int grid) {
     Mat dest(1, totalBins * gridSquare, CV_32FC1, cvScalar(255));
     map<int, float> bins = map<int, float>();
 
-    //float maxcol = 0;
-    //float mincol = 0;
-
-    //double* sumofall = new double[gridSquare];
-    double sumofall = 0.0;
-    //fprintf(stderr, "%d\n", dest.cols);
+    double* sumofall = new double[gridSquare];
     for (int i = 0; i < dest.cols; i++) {
         bins[i] = 0.0f;
     }
@@ -34,40 +29,28 @@ Mat getHistogram(Mat& image, int quantum, int grid) {
     for (int i = 0; i < image.rows; i++) {
         for (int j = 0; j < image.cols; j++) {
             Vec3b col = image.at<Vec3b>(i, j);
-            int offsetRow = (i-1) / (image.rows / grid);
-            int offsetCol = (j-1) / (image.cols / grid);
-            int offset = offsetRow * grid + offsetCol;
+            int offsetRow = min(grid-1, (i-1) / (image.rows / grid));
+            int offsetCol = min(grid-1, (j-1) / (image.cols / grid));
+            int offset = offsetCol * grid + offsetRow;
 
-            //fprintf(stderr, "%d - %d (%d)\n", offsetRow, offsetCol, offset);
             for (int k = 0; k < image.channels(); k++) {
                 int illumination = col.val[k];
                 int bin = (totalBins*offset) + (numBins * k) + (illumination / quantum);
                 bins[bin] += 1.0f;
-                sumofall += 1.0;
-                //sumofall[offset] += 1.0;
-                //maxcol = max(maxcol, bins[bin]);
-                //mincol = min(mincol, bins[bin]);
+                sumofall[offset] += 1.0;
             }
         }
     }
 
     for(auto it = bins.begin(); it != bins.end(); ++it) {
-       // int offset = it->first / totalBins;
-        it->second /= sumofall;
+        int offset = it->first / totalBins;
+        it->second /= sumofall[offset];
     }
 
-    //Mat dzt(500, numBins * image.channels(), CV_8UC3, cvScalar(255, 255, 255));
     for (int i = 0; i < dest.cols-1; i++) {
-        /* for testing purposes
-        float scalar = (float)dzt.rows / maxcol;
-        float mult = dzt.rows - scalar*(bins[i] * sumofall);
-        float mult2 = dzt.rows - scalar*(bins[i+1] * sumofall);
-
-        Vec3b newcol(((i / numBins) == 0) ? 255 : 0, ((i / numBins) == 1) ? 255 : 0, ((i / numBins) == 2) ? 255 : 0);
-        line(dzt, Point(i, mult), Point(i+1, mult2), Scalar(newcol), 2, 8, 0);*/
-
         dest.at<float>(0, i) = bins[i];
     }
+
     return dest;
 }
 
@@ -94,7 +77,7 @@ int getNumOfJPG(string dir) {
     return count;
 }
 
-int getdir (string dir, map<string, vector<Mat>> &trainingFiles, map<string, vector<Mat>> &testFiles, string category, int count)
+int traverseImages(string dir, map<string, vector<Mat>> &trainingFiles, map<string, vector<Mat>> &testFiles, string category, int count)
 {
     DIR *dp;
     struct dirent *dirp;
@@ -111,7 +94,7 @@ int getdir (string dir, map<string, vector<Mat>> &trainingFiles, map<string, vec
             if (strcmp(dirp->d_name, ".") == 0 || strcmp(dirp->d_name, "..") == 0)
                 continue;
 
-            getdir(path, trainingFiles, testFiles, string(dirp->d_name), getNumOfJPG(path));
+            traverseImages(path, trainingFiles, testFiles, string(dirp->d_name), getNumOfJPG(path));
 
         }
         else {
@@ -126,7 +109,7 @@ int getdir (string dir, map<string, vector<Mat>> &trainingFiles, map<string, vec
                     int len = snprintf(path, sizeof(path)-1, "%s/%s", dir.c_str(), dirp->d_name);
 
                     Mat histogram = imread(path, 1);
-                    histogram = getHistogram(histogram, 1, 2);
+                    histogram = getHistogram(histogram, 4, 1);
                     if (trainingFiles[category].size() < count / 2)
                         trainingFiles[category].push_back(histogram);
                     else
@@ -139,35 +122,38 @@ int getdir (string dir, map<string, vector<Mat>> &trainingFiles, map<string, vec
     return 0;
 }
 
-float intersectHist(Mat& h1, Mat& h2) {
-    float sum = 0.0f;
+double intersectHist(Mat& h1, Mat& h2) {
+    double sum = 0.0f;
 
     for (int i = 0; i < h1.cols; i++) {
-        fprintf(stderr,"%f - ",h1.at<float>(0, i));
-        sum += (h1.at<float>(0, i) - h2.at<float>(0, i)) * (h1.at<float>(0, i) - h2.at<float>(0, i)) / (h1.at<float>(0, i) + h2.at<float>(0, i));
+        double h1val = h1.at<float>(0, i);
+        double h2val = h2.at<float>(0, i);
+        sum += min(h1val, h2val);
+        //sum += (h1val - h2val) * (h1val-h2val) / (h1val + h2val);
+        //sum += (h1.at<float>(0, i) - h2.at<float>(0, i)) * (h1.at<float>(0, i) - h2.at<float>(0, i)) / (h1.at<float>(0, i) + h2.at<float>(0, i));
     }
-    fprintf(stderr,"\n");
 
-    return sum/2;
+    return 1.0-sum;
 }
 
 int main(int argc, char** argv )
 {
     string dir = string(".");
-    getdir(dir, trainingSet, testSet, ".", 0);
+    traverseImages(dir, trainingSet, testSet, ".", 0);
 
     namedWindow("Display Image", CV_WINDOW_AUTOSIZE );
 
-    float minDist = 1.0f;
+    double minDist = 1.0;
     string minCategory = " ";
     map<string, vector<string>> results = map<string, vector<string>>();
 
 
+    // map the training category with test category
     for (auto testIt = testSet.begin(); testIt != testSet.end(); ++testIt) {
         for (auto testImg = testIt->second.begin(); testImg != testIt->second.end(); ++testImg) {
             for (auto it = trainingSet.begin(); it != trainingSet.end(); ++it) {
                 for (auto trainingImg = it->second.begin(); trainingImg != it->second.end(); trainingImg++) {
-                    float res = intersectHist(*trainingImg, *testImg);
+                    double res = intersectHist(*trainingImg, *testImg);
 
                     if (res < minDist) {
                         minDist = res;
@@ -181,16 +167,21 @@ int main(int argc, char** argv )
         }
     }
 
+    int matchedSize = 0;
+    int testSize = 0;
+
     for (auto testIt = results.begin(); testIt != results.end(); ++testIt) {
+        matchedSize = 0;
+        testSize = 0;
         fprintf(stderr, "%s - ", testIt->first.c_str());
-        int matchedSize = 0;
-        int testSize = testSet[testIt->first].size();
+        testSize += testSet[testIt->first].size();
         for (auto testImg = testIt->second.begin(); testImg != testIt->second.end(); ++testImg) {
             if (*testImg == testIt->first)
                 matchedSize++;
         }
         fprintf(stderr, "%f%\n", (float)100.0f*matchedSize / testSize);
     }
+    //fprintf(stderr, "Overall: %f%\n", (float)100.0f*matchedSize / testSize);
 
 
     return 0;
