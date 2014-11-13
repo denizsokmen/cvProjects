@@ -184,6 +184,7 @@ int main(int argc, char** argv )
 
     int totalSize = 0;
     int totalMatch = 0;
+    
 
     fprintf(stderr, "Calculating results...\n");
 
