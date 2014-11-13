@@ -5,6 +5,9 @@
 #include <dirent.h>
 
 
+#define QUANTIZATION 8
+#define GRID_SIZE 2 // 2 x 2
+
 using namespace cv;
 using namespace std;
 
@@ -18,6 +21,7 @@ Mat getHistogram(Mat& image, int quantum, int grid) {
     int gridSquare = grid*grid;
 
     Mat dest(1, totalBins * gridSquare, CV_32FC1, cvScalar(255));
+
     map<int, float> bins = map<int, float>();
 
     double* sumofall = new double[gridSquare];
@@ -109,11 +113,13 @@ int traverseImages(string dir, map<string, vector<Mat>> &trainingFiles, map<stri
                     int len = snprintf(path, sizeof(path)-1, "%s/%s", dir.c_str(), dirp->d_name);
 
                     Mat histogram = imread(path, 1);
-                    histogram = getHistogram(histogram, 4, 1);
+                    histogram = getHistogram(histogram, QUANTIZATION, GRID_SIZE);
+                    
                     if (trainingFiles[category].size() < count / 2)
                         trainingFiles[category].push_back(histogram);
                     else
                         testFiles[category].push_back(histogram);
+
                 }
             }
         }
@@ -123,23 +129,27 @@ int traverseImages(string dir, map<string, vector<Mat>> &trainingFiles, map<stri
 }
 
 double intersectHist(Mat& h1, Mat& h2) {
-    double sum = 0.0f;
+    double sum = 0.0;
 
     for (int i = 0; i < h1.cols; i++) {
         double h1val = h1.at<float>(0, i);
         double h2val = h2.at<float>(0, i);
-        sum += min(h1val, h2val);
-        //sum += (h1val - h2val) * (h1val-h2val) / (h1val + h2val);
+        //sum += min(h1val, h2val);
+        if (h1val + h2val > 0.0)
+            sum += (h1val - h2val) * (h1val-h2val) / (h1val + h2val);
         //sum += (h1.at<float>(0, i) - h2.at<float>(0, i)) * (h1.at<float>(0, i) - h2.at<float>(0, i)) / (h1.at<float>(0, i) + h2.at<float>(0, i));
     }
+    //fprintf(stderr, "%f\n", sum);
 
-    return 1.0-sum;
+    return sum/2.0;
 }
 
 int main(int argc, char** argv )
 {
-    string dir = string(".");
+    string dir = string("./DATASET");
+    fprintf(stderr, "Traversing images & calculating histograms...");
     traverseImages(dir, trainingSet, testSet, ".", 0);
+    fprintf(stderr, "Done.\n");
 
     namedWindow("Display Image", CV_WINDOW_AUTOSIZE );
 
@@ -148,6 +158,7 @@ int main(int argc, char** argv )
     map<string, vector<string>> results = map<string, vector<string>>();
 
 
+    fprintf(stderr, "Comparing histograms...");
     // map the training category with test category
     for (auto testIt = testSet.begin(); testIt != testSet.end(); ++testIt) {
         for (auto testImg = testIt->second.begin(); testImg != testIt->second.end(); ++testImg) {
@@ -166,22 +177,35 @@ int main(int argc, char** argv )
             minDist = 1.0f;
         }
     }
+    fprintf(stderr, "Done.\n");
 
     int matchedSize = 0;
     int testSize = 0;
+
+    int totalSize = 0;
+    int totalMatch = 0;
+
+    fprintf(stderr, "Calculating results...\n");
 
     for (auto testIt = results.begin(); testIt != results.end(); ++testIt) {
         matchedSize = 0;
         testSize = 0;
         fprintf(stderr, "%s - ", testIt->first.c_str());
         testSize += testSet[testIt->first].size();
+        totalSize += testSet[testIt->first].size();
+
         for (auto testImg = testIt->second.begin(); testImg != testIt->second.end(); ++testImg) {
-            if (*testImg == testIt->first)
+            if (*testImg == testIt->first) {
                 matchedSize++;
+                totalMatch++;
+            }
+
         }
         fprintf(stderr, "%f%\n", (float)100.0f*matchedSize / testSize);
     }
-    //fprintf(stderr, "Overall: %f%\n", (float)100.0f*matchedSize / testSize);
+
+    fprintf(stderr, "Done\n");
+    fprintf(stderr, "Overall: %f%\n", (float)100.0f*totalMatch / totalSize);
 
 
     return 0;
