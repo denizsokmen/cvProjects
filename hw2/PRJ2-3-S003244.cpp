@@ -3,6 +3,7 @@
 #include <iostream>
 #include <stdio.h>
 #include <dirent.h>
+#include <thread>
 
 
 #define QUANTIZATION 8
@@ -29,22 +30,22 @@ Mat getHistogram(Mat& image, int quantum, int grid) {
         bins[i] = 0.0f;
     }
 
-
     for (int i = 0; i < image.rows; i++) {
-        for (int j = 0; j < image.cols; j++) {
-            Vec3b col = image.at<Vec3b>(i, j);
-            int offsetRow = min(grid-1, (i-1) / (image.rows / grid));
-            int offsetCol = min(grid-1, (j-1) / (image.cols / grid));
-            int offset = offsetCol * grid + offsetRow;
+	for (int j = 0; j < image.cols; j++) {
+	    Vec3b col = image.at<Vec3b>(i, j);
+	    int offsetRow = min(grid-1, (i-1) / (image.rows / grid));
+	    int offsetCol = min(grid-1, (j-1) / (image.cols / grid));
+	    int offset = offsetCol * grid + offsetRow;
 
-            for (int k = 0; k < image.channels(); k++) {
-                int illumination = col.val[k];
-                int bin = (totalBins*offset) + (numBins * k) + (illumination / quantum);
-                bins[bin] += 1.0f;
-                sumofall[offset] += 1.0;
-            }
-        }
+	    for (int k = 0; k < image.channels(); k++) {
+		int illumination = col.val[k];
+		int bin = (totalBins*offset) + (numBins * k) + (illumination / quantum);
+		bins[bin] += 1.0f;
+		sumofall[offset] += 1.0;
+	    }
+	}
     }
+    
 
     for(auto it = bins.begin(); it != bins.end(); ++it) {
         int offset = it->first / totalBins;
@@ -63,7 +64,7 @@ int getNumOfJPG(string dir) {
     struct dirent *pdir;
     DIR *pDir;
     int count = 0;
-
+    
     pDir = opendir(dir.c_str());
 
     if (pDir != NULL) {
@@ -130,7 +131,7 @@ int traverseImages(string dir, map<string, vector<Mat>> &trainingFiles, map<stri
 
 double intersectHist(Mat& h1, Mat& h2) {
     double sum = 0.0;
-
+    
     for (int i = 0; i < h1.cols; i++) {
         double h1val = h1.at<float>(0, i);
         double h2val = h2.at<float>(0, i);
