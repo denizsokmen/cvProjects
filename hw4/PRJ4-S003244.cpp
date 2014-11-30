@@ -223,7 +223,7 @@ void detectClock(string title, Mat image) {
 	minute = ((int)(15 + (degrees2 / 6))) % 60;
     }
 
-    fprintf(stderr, " = %02d:%02d or ", hour, minute);
+    fprintf(stderr, " = %02d:%02d (or ", hour, minute);
 
     if (!hands.empty()) {
 	double degrees = 360 - (fmod((hands.front().first + PI*2), (PI*2)) * 180.0 / PI);
@@ -234,7 +234,7 @@ void detectClock(string title, Mat image) {
 	minute = ((int)(15 + (degrees / 6))) % 60;
     }
 
-    fprintf(stderr, "%02d:%02d\n", hour, minute);
+    fprintf(stderr, "%02d:%02d)\n", hour, minute);
 
     clusterLengths.clear();
     cluster.clear();
