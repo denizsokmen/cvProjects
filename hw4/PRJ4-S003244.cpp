@@ -113,11 +113,19 @@ int traverseImages(string dir)
 	    if (len >= 4) {
 		char path[1024];
 		int len = snprintf(path, sizeof(path)-1, "%s/%s", dir.c_str(), dirp->d_name);
-		Mat histogram = imread(path, 0);		    
+		Mat histogram = imread(path, 0);
+
 		imageMap[dirp->d_name] = histogram;
+//		if (histogram.size().width < 400) {
+		    Size size(500, 500);
+		    Mat dest;
+		    // erode(histogram, histogram, Mat(), Point(-1, -1), 1, 1, 1);
+		    resize(histogram, dest, size);
+		    imageMap[dirp->d_name] = dest;
+		    //	}
 	    }
 
-	    fprintf(stderr, "%s\n", dirp->d_name);
+	    // fprintf(stderr, "%s\n", dirp->d_name);
 
 	}
     }
@@ -151,16 +159,17 @@ void swapLineEnding(Vec4i &line,  Vec2i center) {
 void detectClock(string title, Mat image) {
     Mat dst, cdst;
     bitwise_not(image, image);
-    cv::threshold(image, dst, 0, 255, CV_THRESH_TOZERO | CV_THRESH_OTSU);
+    //cv::threshold(image, dst, 0, 255, CV_THRESH_TOZERO | CV_THRESH_OTSU);
     // dilate(dst, dst, Mat(), Point(-1, -1), 1, 1, 1);
-    erode(dst, dst, Mat(), Point(-1, -1), 1, 1, 1);
-    //Canny(dst, dst, 50, 200, 3);
+    // dilate(dst, dst, Mat(), Point(-1, -1), 1, 1, 1);
+    erode(image, dst, Mat(), Point(-1, -1), 1, 1, 1);
+    Canny(dst, dst, 50, 200, 3);
   
     cvtColor(dst, cdst, CV_GRAY2BGR);
 
-    fprintf(stderr, "%s\n", title.c_str());
+    fprintf(stderr, "%s", title.c_str());
     vector<Vec4i> lines;
-    HoughLinesP(dst, lines, 1, CV_PI/180, 10, 30, 5 );
+    HoughLinesP(dst, lines, 1, CV_PI/180, 50, 50, 1 );
     for( size_t i = 0; i < lines.size(); i++ )
     {
 	Vec4i l = lines[i];
@@ -168,22 +177,22 @@ void detectClock(string title, Mat image) {
 	Vec2i diff = Vec2i(l[2],l[3]) - Vec2i(l[0],l[1]);
 	Vec2i center(cdst.cols / 2, cdst.rows / 2);
 //	fprintf(stderr, "%d %d %d %d\n", l[0], l[1], l[2], l[3]);
-	if (pointToLineDist(Vec2d(l[0], l[1]), Vec2d(l[2], l[3]), Vec2d(cdst.cols / 2, cdst.rows / 2)) < 60) {
+	if (pointToLineDist(Vec2d(l[0], l[1]), Vec2d(l[2], l[3]), Vec2d(cdst.cols / 2, cdst.rows / 2)) < 90) {
           
 	    addCluster(atan2(-diff[1], diff[0]), norm(Vec2i(l[2], l[3])-center));
 
-	    fprintf(stderr, "(%d,%d) (%d, %d) (%d, %d) %f %f\n", l[0], l[1], l[2], l[3], cdst.cols / 2, cdst.rows / 2, norm(Vec2i(l[0], l[1]) - center), norm(Vec2i(l[2], l[3]) - center));
+	    // fprintf(stderr, "(%d,%d) (%d, %d) (%d, %d) %f %f\n", l[0], l[1], l[2], l[3], cdst.cols / 2, cdst.rows / 2, norm(Vec2i(l[0], l[1]) - center), norm(Vec2i(l[2], l[3]) - center));
 	    line( cdst, Point(l[0], l[1]), Point(l[2], l[3]), Scalar(0,0,255), 3, CV_AA);
 	    line( cdst, Point(center[0], center[1]), Point(center[0]+2, center[1]+2), Scalar(0,255,0), 3, CV_AA);
 	}
     }
 
     for (auto it = cluster.begin(); it != cluster.end(); ++it) {
-	fprintf(stderr, "(%f)\n", it->first);
+//	fprintf(stderr, "(%f)\n", it->first);
 
 	double sum = 0.0;
 	for (auto it2 = it->second.begin(); it2 != it->second.end(); it2++) {
-	    fprintf(stderr, "--(%f)\n", *it2);
+	    // fprintf(stderr, "--(%f)\n", *it2);
 	    sum += *it2;
 	}
 
@@ -209,12 +218,23 @@ void detectClock(string title, Mat image) {
 	double degrees = 360 - (fmod((hands.front().first + PI*2), (PI*2)) * 180.0 / PI);
 	double degrees2 = 360 - (fmod((hands.back().first + PI*2), (PI*2)) * 180.0 / PI);
 
-	fprintf(stderr, "%f ... %f\n", degrees, degrees2);
+//	fprintf(stderr, "%f ... %f\n", degrees, degrees2);
 	hour = ((int)(3 + (degrees / 30))) % 12;
 	minute = ((int)(15 + (degrees2 / 6))) % 60;
     }
 
-    fprintf(stderr, "%d:%d\n", hour, minute);
+    fprintf(stderr, " = %02d:%02d or ", hour, minute);
+
+    if (!hands.empty()) {
+	double degrees = 360 - (fmod((hands.front().first + PI*2), (PI*2)) * 180.0 / PI);
+	double degrees2 = 360 - (fmod((hands.back().first + PI*2), (PI*2)) * 180.0 / PI);
+
+//	fprintf(stderr, "%f ... %f\n", degrees, degrees2);
+	hour = ((int)(3 + (degrees2 / 30))) % 12;
+	minute = ((int)(15 + (degrees / 6))) % 60;
+    }
+
+    fprintf(stderr, "%02d:%02d\n", hour, minute);
 
     clusterLengths.clear();
     cluster.clear();
