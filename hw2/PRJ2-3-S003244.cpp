@@ -1,5 +1,7 @@
 /* Deniz Sökmen S003244 Department of Computer Science */
 #include <opencv2/opencv.hpp>
+
+#include <opencv2/core/core.hpp>
 #include <iostream>
 #include <stdio.h>
 #include <dirent.h>
@@ -7,7 +9,7 @@
 
 
 #define QUANTIZATION 8
-#define GRID_SIZE 2 // 2 x 2
+#define GRID_SIZE 4 // 2 x 2
 
 using namespace cv;
 using namespace std;
@@ -16,16 +18,24 @@ using namespace std;
 map<string, vector<Mat>> trainingSet = map<string, vector<Mat>>();
 map<string, vector<Mat>> testSet = map<string, vector<Mat>>();
 
+map<string, vector<Mat>> projectedTrainingSet = map<string, vector<Mat>>();
+map<string, vector<Mat>> projectedTestSet = map<string, vector<Mat>>();
+
+bool is_valid_double(double x)
+{
+    return x*0.0==0.0;
+}
+
 Mat getHistogram(Mat& image, int quantum, int grid) {
     int numBins = 256/quantum;
     int totalBins = image.channels() * numBins;
     int gridSquare = grid*grid;
 
-    Mat dest(1, totalBins * gridSquare, CV_32FC1, cvScalar(255));
+    Mat dest(1, totalBins * gridSquare, CV_64FC1, cvScalar(0));
 
     map<int, float> bins = map<int, float>();
 
-    double* sumofall = new double[gridSquare];
+    double sumofall = 0.0;
     for (int i = 0; i < dest.cols; i++) {
         bins[i] = 0.0f;
     }
@@ -41,7 +51,7 @@ Mat getHistogram(Mat& image, int quantum, int grid) {
 		int illumination = col.val[k];
 		int bin = (totalBins*offset) + (numBins * k) + (illumination / quantum);
 		bins[bin] += 1.0f;
-		sumofall[offset] += 1.0;
+		sumofall += 1.0;
 	    }
 	}
     }
@@ -49,14 +59,65 @@ Mat getHistogram(Mat& image, int quantum, int grid) {
 
     for(auto it = bins.begin(); it != bins.end(); ++it) {
         int offset = it->first / totalBins;
-        it->second /= sumofall[offset];
+
+	if (is_valid_double(sumofall))
+	    it->second /= sumofall;
+	else {
+	    fprintf(stderr, "%f %d\n", sumofall, offset);
+	    exit(0);
+	}
     }
 
-    for (int i = 0; i < dest.cols-1; i++) {
+    for (int i = 0; i < dest.cols; i++) {
         dest.at<float>(0, i) = bins[i];
     }
 
+
+    subtract(dest, mean(dest), dest);
+    
+    // delete[] sumofall;
+
     return dest;
+}
+
+
+// I have taken this function from a blog. It converts vector of Mats into
+// a single Mat to be used for PCA.
+Mat asRowMatrix(const vector<Mat>& src, int rtype, double alpha = 1, double beta = 0) {
+    // Number of samples:
+    size_t n = src.size();
+    // Return empty matrix if no matrices given:
+    if(n == 0)
+        return Mat();
+    // dimensionality of (reshaped) samples
+    size_t d = src[0].total();
+    fprintf(stderr, "%d %d\n",src.size(), d);
+    // Create resulting data matrix:
+    Mat data(n, d, rtype);
+    // Now copy data:
+    for(int i = 0; i < n; i++) {
+        //
+        if(src[i].empty()) {
+            string error_message = format("Image number %d was empty, please check your input data.", i);
+            CV_Error(CV_StsBadArg, error_message);
+        }
+        // Make sure data can be reshaped, throw a meaningful exception if not!
+        if(src[i].total() != d) {
+            string error_message = format("Wrong number of elements in matrix #%d! Expected %d was %d.", i, d, src[i].total());
+            CV_Error(CV_StsBadArg, error_message);
+        }
+        // Get a hold of the current row:
+        Mat xi = data.row(i);
+        // Make reshape happy by cloning for non-continuous matrices:
+	src[i].copyTo(xi);
+
+	/* if(src[i].isContinuous()) {
+	     src[i].reshape(1, 1).convertTo(xi, rtype, alpha, beta);
+        } else {
+	     src[i].clone().reshape(1, 1).convertTo(xi, alpha,beta);
+	     }*/
+    }
+    return data;
 }
 
 int getNumOfJPG(string dir) {
@@ -115,7 +176,7 @@ int traverseImages(string dir, map<string, vector<Mat>> &trainingFiles, map<stri
 
                     Mat histogram = imread(path, 1);
                     histogram = getHistogram(histogram, QUANTIZATION, GRID_SIZE);
-                    
+		    
                     if (trainingFiles[category].size() < count / 2)
                         trainingFiles[category].push_back(histogram);
                     else
@@ -154,19 +215,69 @@ int main(int argc, char** argv )
 
     namedWindow("Display Image", CV_WINDOW_AUTOSIZE );
 
-    double minDist = 1.0;
+    double minDist = 1000000.0;
     string minCategory = " ";
     map<string, vector<string>> results = map<string, vector<string>>();
 
 
-    fprintf(stderr, "Comparing histograms...");
-    // map the training category with test category
+    vector<Mat> histData;
+    for (auto testIt = trainingSet.begin(); testIt != trainingSet.end(); ++testIt) {
+        for (auto testImg = testIt->second.begin(); testImg != testIt->second.end(); ++testImg) {
+		histData.push_back(*testImg);
+	        
+
+		
+	}
+    }
+
+    Mat data = asRowMatrix(histData, CV_64FC1);
+    
+     
+    
+    subtract(data, mean(data), data);
+
+     
+
+    PCA pca(data, Mat(), CV_PCA_DATA_AS_ROW, 0.95);
+    Mat means = pca.mean.clone();
+    Mat eigenvalues = pca.eigenvalues.clone();
+    Mat eigenvectors = pca.eigenvectors.clone();
+    /* for (int j = 0; j < eigenvectors.rows; j++) {
+	for (int i = 0; i < eigenvectors.cols; i++) {
+	    double h1val = eigenvectors.at<double>(j, i);
+
+	    if (is_valid_double(h1val))
+	    fprintf(stderr,"%f - %f\n ", h1val,  eigenvalues.at<double>(0, i));
+	    else {
+		exit(0);
+	    }
+	}
+	fprintf(stderr, "\n-----\n");
+
+	}*/
+    
+     fprintf(stderr, "%d %d %f %f %d %d\n", eigenvectors.rows, eigenvectors.cols, eigenvalues.at<double>(0,0),eigenvalues.at<double>(0,1),  means.rows, means.cols);
     for (auto testIt = testSet.begin(); testIt != testSet.end(); ++testIt) {
         for (auto testImg = testIt->second.begin(); testImg != testIt->second.end(); ++testImg) {
-            for (auto it = trainingSet.begin(); it != trainingSet.end(); ++it) {
-                for (auto trainingImg = it->second.begin(); trainingImg != it->second.end(); trainingImg++) {
-                    double res = intersectHist(*trainingImg, *testImg);
+	    Mat proj = pca.project(*testImg);
+	    projectedTestSet[testIt->first].push_back(proj);
+	}
+    }
 
+    for (auto it = trainingSet.begin(); it != trainingSet.end(); ++it) {
+	for (auto trainingImg = it->second.begin(); trainingImg != it->second.end(); trainingImg++) {
+	    Mat proj = pca.project(*trainingImg);
+	    projectedTrainingSet[it->first].push_back(proj);
+	}
+    }
+    fprintf(stderr, "Comparing histograms...");
+    // map the training category with test category
+    for (auto testIt = projectedTestSet.begin(); testIt != projectedTestSet.end(); ++testIt) {
+        for (auto testImg = testIt->second.begin(); testImg != testIt->second.end(); ++testImg) {
+            for (auto it = projectedTrainingSet.begin(); it != projectedTrainingSet.end(); ++it) {
+                for (auto trainingImg = it->second.begin(); trainingImg != it->second.end(); trainingImg++) {
+                    double res = norm(*testImg, *trainingImg, NORM_L2);
+		    // fprintf(stderr, "%f\n",res);
                     if (res < minDist) {
                         minDist = res;
                         minCategory = it->first;
@@ -175,7 +286,7 @@ int main(int argc, char** argv )
             }
 
             results[minCategory].push_back(testIt->first);
-            minDist = 1.0f;
+            minDist = 10000000.0f;
         }
     }
     fprintf(stderr, "Done.\n");
@@ -193,8 +304,8 @@ int main(int argc, char** argv )
         matchedSize = 0;
         testSize = 0;
         fprintf(stderr, "%s - ", testIt->first.c_str());
-        testSize += testSet[testIt->first].size();
-        totalSize += testSet[testIt->first].size();
+        testSize += projectedTestSet[testIt->first].size();
+        totalSize += projectedTestSet[testIt->first].size();
 
         for (auto testImg = testIt->second.begin(); testImg != testIt->second.end(); ++testImg) {
             if (*testImg == testIt->first) {
@@ -208,7 +319,7 @@ int main(int argc, char** argv )
 
     fprintf(stderr, "Done\n");
     fprintf(stderr, "Overall: %f%\n", (float)100.0f*totalMatch / totalSize);
-
+    
 
     return 0;
 }
