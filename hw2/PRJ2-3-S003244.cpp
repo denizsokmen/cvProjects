@@ -33,7 +33,7 @@ Mat getHistogram(Mat& image, int quantum, int grid) {
 
     Mat dest(1, totalBins * gridSquare, CV_64FC1, cvScalar(0));
 
-    map<int, float> bins = map<int, float>();
+    map<int, double> bins = map<int, double>();
 
     double sumofall = 0.0;
     for (int i = 0; i < dest.cols; i++) {
@@ -50,7 +50,7 @@ Mat getHistogram(Mat& image, int quantum, int grid) {
 	    for (int k = 0; k < image.channels(); k++) {
 		int illumination = col.val[k];
 		int bin = (totalBins*offset) + (numBins * k) + (illumination / quantum);
-		bins[bin] += 1.0f;
+		bins[bin] += 1.0;
 		sumofall += 1.0;
 	    }
 	}
@@ -69,11 +69,11 @@ Mat getHistogram(Mat& image, int quantum, int grid) {
     }
 
     for (int i = 0; i < dest.cols; i++) {
-        dest.at<float>(0, i) = bins[i];
+        dest.at<double>(0, i) = bins[i];
     }
 
 
-    subtract(dest, mean(dest), dest);
+    //  subtract(dest, mean(dest), dest);
     
     // delete[] sumofall;
 
@@ -223,22 +223,15 @@ int main(int argc, char** argv )
     vector<Mat> histData;
     for (auto testIt = trainingSet.begin(); testIt != trainingSet.end(); ++testIt) {
         for (auto testImg = testIt->second.begin(); testImg != testIt->second.end(); ++testImg) {
-		histData.push_back(*testImg);
-	        
-
-		
+	    Mat data = *testImg;
+	    subtract(data, mean(data), data);
+	    histData.push_back(data);
 	}
     }
 
     Mat data = asRowMatrix(histData, CV_64FC1);
-    
-     
-    
-    subtract(data, mean(data), data);
 
-     
-
-    PCA pca(data, Mat(), CV_PCA_DATA_AS_ROW, 0.95);
+    PCA pca(data, Mat(), CV_PCA_DATA_AS_ROW, 0.75);
     Mat means = pca.mean.clone();
     Mat eigenvalues = pca.eigenvalues.clone();
     Mat eigenvectors = pca.eigenvectors.clone();
@@ -286,7 +279,7 @@ int main(int argc, char** argv )
             }
 
             results[minCategory].push_back(testIt->first);
-            minDist = 10000000.0f;
+            minDist = 10000000.0;
         }
     }
     fprintf(stderr, "Done.\n");
