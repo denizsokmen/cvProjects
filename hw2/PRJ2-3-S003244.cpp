@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <dirent.h>
 #include <thread>
+#include <fstream>
 
 
 #define QUANTIZATION 8
@@ -218,8 +219,8 @@ int main(int argc, char** argv )
     double minDist = 1000000.0;
     string minCategory = " ";
     map<string, vector<string>> results = map<string, vector<string>>();
-
-
+    
+    fprintf(stderr, "Putting histograms as rows in a single matrix...");
     vector<Mat> histData;
     for (auto testIt = trainingSet.begin(); testIt != trainingSet.end(); ++testIt) {
         for (auto testImg = testIt->second.begin(); testImg != testIt->second.end(); ++testImg) {
@@ -230,8 +231,11 @@ int main(int argc, char** argv )
     }
 
     Mat data = asRowMatrix(histData, CV_64FC1);
+    fprintf(stderr, "Done.\n");
 
-    PCA pca(data, Mat(), CV_PCA_DATA_AS_ROW, 0.75);
+
+    fprintf(stderr, "Performing PCA...");
+    PCA pca(data, Mat(), CV_PCA_DATA_AS_ROW, 0.70);
     Mat means = pca.mean.clone();
     Mat eigenvalues = pca.eigenvalues.clone();
     Mat eigenvectors = pca.eigenvectors.clone();
@@ -248,22 +252,31 @@ int main(int argc, char** argv )
 	fprintf(stderr, "\n-----\n");
 
 	}*/
+
+    fprintf(stderr, "Done.\n");
     
      fprintf(stderr, "%d %d %f %f %d %d\n", eigenvectors.rows, eigenvectors.cols, eigenvalues.at<double>(0,0),eigenvalues.at<double>(0,1),  means.rows, means.cols);
-    for (auto testIt = testSet.begin(); testIt != testSet.end(); ++testIt) {
-        for (auto testImg = testIt->second.begin(); testImg != testIt->second.end(); ++testImg) {
-	    Mat proj = pca.project(*testImg);
-	    projectedTestSet[testIt->first].push_back(proj);
-	}
-    }
+    
+     
+    fprintf(stderr, "Projecting feature vectors on eigenspace...");
 
-    for (auto it = trainingSet.begin(); it != trainingSet.end(); ++it) {
-	for (auto trainingImg = it->second.begin(); trainingImg != it->second.end(); trainingImg++) {
-	    Mat proj = pca.project(*trainingImg);
-	    projectedTrainingSet[it->first].push_back(proj);
-	}
-    }
-    fprintf(stderr, "Comparing histograms...");
+     for (auto testIt = testSet.begin(); testIt != testSet.end(); ++testIt) {
+	 for (auto testImg = testIt->second.begin(); testImg != testIt->second.end(); ++testImg) {
+	     Mat proj = pca.project(*testImg);
+	     projectedTestSet[testIt->first].push_back(proj);
+	 }
+     }
+
+     for (auto it = trainingSet.begin(); it != trainingSet.end(); ++it) {
+	 for (auto trainingImg = it->second.begin(); trainingImg != it->second.end(); trainingImg++) {
+	     Mat proj = pca.project(*trainingImg);
+	     projectedTrainingSet[it->first].push_back(proj);
+	 }
+     }
+
+
+    fprintf(stderr, "Done.\n");
+    fprintf(stderr, "Comparing projected histograms...");
     // map the training category with test category
     for (auto testIt = projectedTestSet.begin(); testIt != projectedTestSet.end(); ++testIt) {
         for (auto testImg = testIt->second.begin(); testImg != testIt->second.end(); ++testImg) {
@@ -313,6 +326,28 @@ int main(int argc, char** argv )
     fprintf(stderr, "Done\n");
     fprintf(stderr, "Overall: %f%\n", (float)100.0f*totalMatch / totalSize);
     
+    ofstream myfile;
+    myfile.open ("results.csv");
+
+    for (auto testIt = projectedTestSet.begin(); testIt != projectedTestSet.end(); ++testIt) {
+	 for (auto testImg = testIt->second.begin(); testImg != testIt->second.end(); ++testImg) {
+	     for (int i = 0; i < testImg->cols - 1; i++) {
+		 myfile << testImg->at<double>(0,i) << ",";
+	     }
+	     myfile << testImg->at<double>(0, testImg->cols - 1) << "\n";
+	 }
+     }
+
+     for (auto it = projectedTrainingSet.begin(); it != projectedTrainingSet.end(); ++it) {
+	 for (auto trainingImg = it->second.begin(); trainingImg != it->second.end(); trainingImg++) {
+	     for (int i = 0; i < trainingImg->cols - 1; i++) {
+		 myfile << trainingImg->at<double>(0,i) << ",";
+	     }
+	     myfile << trainingImg->at<double>(0, trainingImg->cols - 1) << "\n";
+	 }
+     }
+
+    myfile.close();
 
     return 0;
 }
