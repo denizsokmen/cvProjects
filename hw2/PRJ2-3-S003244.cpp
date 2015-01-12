@@ -207,19 +207,9 @@ double intersectHist(Mat& h1, Mat& h2) {
     return sum/2.0;
 }
 
-int main(int argc, char** argv )
-{
-    string dir = string("./DATASET");
-    fprintf(stderr, "Traversing images & calculating histograms...");
-    traverseImages(dir, trainingSet, testSet, ".", 0);
-    fprintf(stderr, "Done.\n");
-
-    namedWindow("Display Image", CV_WINDOW_AUTOSIZE );
-
-    double minDist = 1000000.0;
-    string minCategory = " ";
-    map<string, vector<string>> results = map<string, vector<string>>();
-    
+void applyPCA(double variance) {
+    projectedTestSet.clear();
+    projectedTrainingSet.clear();
     fprintf(stderr, "Putting histograms as rows in a single matrix...");
     vector<Mat> histData;
     for (auto testIt = trainingSet.begin(); testIt != trainingSet.end(); ++testIt) {
@@ -234,48 +224,34 @@ int main(int argc, char** argv )
     fprintf(stderr, "Done.\n");
 
 
-    fprintf(stderr, "Performing PCA...");
-    PCA pca(data, Mat(), CV_PCA_DATA_AS_ROW, 0.70);
-    Mat means = pca.mean.clone();
-    Mat eigenvalues = pca.eigenvalues.clone();
-    Mat eigenvectors = pca.eigenvectors.clone();
-    /* for (int j = 0; j < eigenvectors.rows; j++) {
-	for (int i = 0; i < eigenvectors.cols; i++) {
-	    double h1val = eigenvectors.at<double>(j, i);
-
-	    if (is_valid_double(h1val))
-	    fprintf(stderr,"%f - %f\n ", h1val,  eigenvalues.at<double>(0, i));
-	    else {
-		exit(0);
-	    }
-	}
-	fprintf(stderr, "\n-----\n");
-
-	}*/
-
+    fprintf(stderr, "Performing PCA with retained variance of %f...", variance);
+    PCA pca(data, Mat(), CV_PCA_DATA_AS_ROW, variance);
     fprintf(stderr, "Done.\n");
-    
-     fprintf(stderr, "%d %d %f %f %d %d\n", eigenvectors.rows, eigenvectors.cols, eigenvalues.at<double>(0,0),eigenvalues.at<double>(0,1),  means.rows, means.cols);
-    
      
     fprintf(stderr, "Projecting feature vectors on eigenspace...");
 
-     for (auto testIt = testSet.begin(); testIt != testSet.end(); ++testIt) {
-	 for (auto testImg = testIt->second.begin(); testImg != testIt->second.end(); ++testImg) {
-	     Mat proj = pca.project(*testImg);
-	     projectedTestSet[testIt->first].push_back(proj);
-	 }
-     }
+    for (auto testIt = testSet.begin(); testIt != testSet.end(); ++testIt) {
+	for (auto testImg = testIt->second.begin(); testImg != testIt->second.end(); ++testImg) {
+	    Mat proj = pca.project(*testImg);
+	    projectedTestSet[testIt->first].push_back(proj);
+	}
+    }
 
-     for (auto it = trainingSet.begin(); it != trainingSet.end(); ++it) {
-	 for (auto trainingImg = it->second.begin(); trainingImg != it->second.end(); trainingImg++) {
-	     Mat proj = pca.project(*trainingImg);
-	     projectedTrainingSet[it->first].push_back(proj);
-	 }
-     }
+    for (auto it = trainingSet.begin(); it != trainingSet.end(); ++it) {
+	for (auto trainingImg = it->second.begin(); trainingImg != it->second.end(); trainingImg++) {
+	    Mat proj = pca.project(*trainingImg);
+	    projectedTrainingSet[it->first].push_back(proj);
+	}
+    }
 
 
     fprintf(stderr, "Done.\n");
+}
+
+void compareResults() {
+    double minDist = 1000000.0;
+    string minCategory = " ";
+    map<string, vector<string>> results = map<string, vector<string>>();
     fprintf(stderr, "Comparing projected histograms...");
     // map the training category with test category
     for (auto testIt = projectedTestSet.begin(); testIt != projectedTestSet.end(); ++testIt) {
@@ -325,9 +301,11 @@ int main(int argc, char** argv )
 
     fprintf(stderr, "Done\n");
     fprintf(stderr, "Overall: %f%\n", (float)100.0f*totalMatch / totalSize);
-    
+}
+
+void writeResults(std::string filename) {
     ofstream myfile;
-    myfile.open ("results.csv");
+    myfile.open (filename);
 
     for (auto testIt = projectedTestSet.begin(); testIt != projectedTestSet.end(); ++testIt) {
 	 for (auto testImg = testIt->second.begin(); testImg != testIt->second.end(); ++testImg) {
@@ -348,6 +326,105 @@ int main(int argc, char** argv )
      }
 
     myfile.close();
+}
 
+
+void meanShift(double bandwidth) {
+    fprintf(stderr, "Started meanshift...\n");
+    vector<Mat> dataset;
+
+    for (auto testIt = projectedTestSet.begin(); testIt != projectedTestSet.end(); ++testIt) {
+	for (auto testImg = testIt->second.begin(); testImg != testIt->second.end(); ++testImg) {
+	    dataset.push_back(*testImg);
+	}
+    }
+
+    for (auto it = projectedTrainingSet.begin(); it != projectedTrainingSet.end(); ++it) {
+	for (auto trainingImg = it->second.begin(); trainingImg != it->second.end(); trainingImg++) {
+	    dataset.push_back(*trainingImg);
+	}
+    }
+
+    
+    Mat weights(1, dataset.size(), CV_64FC1, cvScalar(0));
+    Mat distances(1, dataset.size(), CV_64FC1, cvScalar(0));
+    Mat mult(1, dataset.size(), CV_64FC1, cvScalar(0));
+    Mat oldweight(1, dataset.size(), CV_64FC1, cvScalar(0));
+    Mat newweight(1, dataset.size(), CV_64FC1, cvScalar(0));
+    vector<Mat> clusters;
+    for (int m = 0; m < dataset.size(); m++) {
+	Mat point = dataset[m];
+	newweight = point.clone();
+	
+
+	do {
+	    for (int n = 0; n < dataset.size(); n++) {
+		Mat comp = dataset[n];
+		double dist = norm(newweight, comp, NORM_L2);
+		dist = -1.0 * dist * dist / (bandwidth * bandwidth);
+		distances.at<double>(0, n) = dist;
+	    }
+	
+	    exp(distances, weights);
+	    for (int n = 0; n < weights.cols; n++) {
+		double w = weights.at<double>(0,n);
+		
+	    }
+	    multiply(point, weights, mult);
+
+	    double weightsum = sum(weights)[0];
+	    oldweight = newweight;
+	    newweight = mult / weightsum;
+	} while (norm(newweight, oldweight, NORM_L2) > 0.001);
+
+	clusters.push_back(newweight);
+    }
+
+    fprintf(stderr, "Clusters: %d \n", clusters.size());
+
+    /*for (auto it = clusters.begin(); it != clusters.end(); it++) {
+	fprintf(stderr, "[%f],", *it);
+    }
+    fprintf(stderr, "\n");*/
+    
+    
+}
+
+int main(int argc, char** argv )
+{
+    string dir = string("./DATASET");
+    fprintf(stderr, "Traversing images & calculating histograms...");
+    traverseImages(dir, trainingSet, testSet, ".", 0);
+    fprintf(stderr, "Done.\n");
+
+    namedWindow("Display Image", CV_WINDOW_AUTOSIZE );
+
+    
+    
+    applyPCA(0.70);
+    compareResults();
+    writeResults("results70.csv");
+    
+    meanShift(1.0);
+
+    /* applyPCA(0.75);
+    compareResults();
+    writeResults("results75.csv");
+
+    applyPCA(0.80);
+    compareResults();
+    writeResults("results80.csv");
+
+    applyPCA(0.85);
+    compareResults();
+    writeResults("results85.csv");
+
+    applyPCA(0.90);
+    compareResults();
+    writeResults("results90.csv");
+
+    applyPCA(0.95);
+    compareResults();
+    writeResults("results95.csv");*/
     return 0;
 }
