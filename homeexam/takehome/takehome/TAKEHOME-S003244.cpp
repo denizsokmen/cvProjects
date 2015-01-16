@@ -23,25 +23,13 @@ struct mapPointComparator {
     }
 };
 
-int p1, p2;
 Mat dice, canny;
 int clusters = 0;
 map<string, Mat> imageMap= map<string, Mat>();
 map<int, vector<Point>> cluster = map <int, vector<Point>>();
-map<double, double> clusterLengths = map<double, double>();
-vector<double> results = vector<double>();
 map<Rect, vector<Point>, mapPointComparator> squareCluster = map<Rect,vector<Point>, mapPointComparator>();
 vector<Point> circles = vector<Point>();
 vector<Rect> squares = vector<Rect>();
-
-RNG rng(12345);
-
-void help()
-{
-    cout << "\nThis program demonstrates line finding with the Hough transform.\n"
-    "Usage:\n"
-    "./houghlines <image_name>, Default is pic1.jpg\n" << endl;
-}
 
 
 void addCluster(Point orientation, double threshold) {
@@ -62,7 +50,6 @@ void addCluster(Point orientation, double threshold) {
             ysum += it2->y;
         }
         Point p = Point(xsum / it->second.size(), ysum / it->second.size());
-        fprintf(stderr, "wut: %d %d\n", p.x, p.y);
         if (cv::norm((p) - orientation) < threshold/2) {
             cluster[it->first].push_back(orientation);
             found = true;
@@ -107,16 +94,12 @@ int traverseImages(string dir)
                 Mat histogram = imread(path, 0);
                 
                 imageMap[dirp->d_name] = histogram;
-                //		if (histogram.size().width < 400) {
                 Size size(500, 500);
                 Mat dest;
-                // erode(histogram, histogram, Mat(), Point(-1, -1), 1, 1, 1);
                 resize(histogram, dest, size);
                 imageMap[dirp->d_name] = dest;
-                //	}
             }
             
-            // fprintf(stderr, "%s\n", dirp->d_name);
             
         }
     }
@@ -124,63 +107,6 @@ int traverseImages(string dir)
     return 0;
 }
 
-
-
-
-void FindBlobs(const cv::Mat &binary, std::vector < std::vector<cv::Point2i> > &blobs)
-{
-    blobs.clear();
-    
-    // Fill the label_image with the blobs
-    // 0  - background
-    // 1  - unlabelled foreground
-    // 2+ - labelled foreground
-    
-    cv::Mat label_image;
-    binary.convertTo(label_image, CV_32SC1);
-    
-    int label_count = 2; // starts at 2 because 0,1 are used already
-    
-    for(int y=0; y < label_image.rows; y++) {
-        int *row = (int*)label_image.ptr(y);
-        for(int x=0; x < label_image.cols; x++) {
-            if(row[x] != 1) {
-                continue;
-            }
-            
-            cv::Rect rect;
-            cv::floodFill(label_image, cv::Point(x,y), label_count, &rect, 0, 0, 4);
-            
-            std::vector <cv::Point2i> blob;
-            
-            for(int i=rect.y; i < (rect.y+rect.height); i++) {
-                int *row2 = (int*)label_image.ptr(i);
-                for(int j=rect.x; j < (rect.x+rect.width); j++) {
-                    if(row2[j] != label_count) {
-                        continue;
-                    }
-                    
-                    blob.push_back(cv::Point2i(j,i));
-                }
-            }
-            
-            blobs.push_back(blob);
-            
-            label_count++;
-        }
-    }
-}
-
-void on_trackbar(int, void*) {
-    
-    cv::threshold(dice, canny, 0, 255, CV_THRESH_TOZERO | CV_THRESH_OTSU);
-    Canny(canny, canny, p1, p2);
-    /*dilate(canny, canny, Mat(), Point(-1, -1), 1, 1, 1);
-     dilate(canny, canny, Mat(), Point(-1, -1), 1, 1, 1);
-     dilate(canny, canny, Mat(), Point(-1, -1), 1, 1, 1);
-     dilate(canny, canny, Mat(), Point(-1, -1), 1, 1, 1);*/
-    imshow("canny", canny);
-}
 
 void setLabel(cv::Mat& im, const std::string label, std::vector<cv::Point>& contour)
 {
@@ -208,55 +134,13 @@ static double angle(cv::Point pt1, cv::Point pt2, cv::Point pt0)
 
 
 void detectClock(string title, Mat image) {
-    /*Mat dst, cdst;
-     bitwise_not(image, image);
-     cv::threshold(image, cdst, 0, 255, CV_THRESH_TOZERO | CV_THRESH_OTSU);
-     //dilate(dst, dst, Mat(), Point(-1, -1), 1, 1, 1);
-     //  dilate(dst, dst, Mat(), Point(-1, -1), 1, 1, 1);
-     
-     Canny(image, image, 60, 150, 3);
-     
-     
-     //dilate(image, image, Mat(), Point(-1, -1), 1, 1, 1);
-     
-     cvtColor(image, cdst, CV_GRAY2BGR);
-     
-     cv::Mat output = cv::Mat::zeros(image.size(), CV_8UC3);
-     
-     cv::Mat binary;
-     std::vector < std::vector<cv::Point2i > > blobs;
-     
-     cv::threshold(image, binary, 0.0, 1.0, cv::THRESH_BINARY);
-     
-     FindBlobs(binary, blobs);
-     
-     // Randomy color the blobs
-     for(size_t i=0; i < blobs.size(); i++) {
-     unsigned char r = 255 * (rand()/(1.0 + RAND_MAX));
-     unsigned char g = 255 * (rand()/(1.0 + RAND_MAX));
-     unsigned char b = 255 * (rand()/(1.0 + RAND_MAX));
-     
-     for(size_t j=0; j < blobs[i].size(); j++) {
-     int x = blobs[i][j].x;
-     int y = blobs[i][j].y;
-     
-     output.at<cv::Vec3b>(y,x)[0] = b;
-     output.at<cv::Vec3b>(y,x)[1] = g;
-     output.at<cv::Vec3b>(y,x)[2] = r;
-     }
-     }
-     
-     cv::imshow("binary", image);
-     cv::imshow("labelled", output);
-     cv::waitKey(0);
-     
-     imshow(title, cdst);*/
     dice = image;
-
+    cluster.clear();
+    squareCluster.clear();
+    squares.clear();
+    circles.clear();
+    clusters = 0;
     
-    
- 
-    // Use Canny instead of threshold to catch squares with gradient shading
     cv::Mat bw;
     cv::threshold(dice, bw, 0, 255, CV_THRESH_TOZERO | CV_THRESH_OTSU);
     cv::Canny(bw, bw, 70, 220);
@@ -268,17 +152,12 @@ void detectClock(string title, Mat image) {
     cv::Mat dst = dice.clone();
     for (int i = 0; i < contours.size(); i++)
     {
-        // Approximate contour with accuracy proportional
-        // to the contour perimeter
+        
         cv::approxPolyDP(cv::Mat(contours[i]), approx, cv::arcLength(cv::Mat(contours[i]), true)*0.02, true);
-        // Skip small or non-convex objects
+        
         if (std::fabs(cv::contourArea(contours[i])) < 10 || !cv::isContourConvex(approx))
             continue;
-        if (approx.size() == 3)
-        {
-            setLabel(dst, "TRI", contours[i]); // Triangles
-        }
-        else if (approx.size() >= 4 && approx.size() <= 6)
+        if (approx.size() >= 4 && approx.size() <= 6)
         {
             // Number of vertices of polygonal curve
             int vtc = approx.size();
@@ -310,12 +189,6 @@ void detectClock(string title, Mat image) {
         }
         else
         {
-            // Detect and label circles
-            /*double area = cv::contourArea(contours[i]);
-            cv::Rect r = cv::boundingRect(contours[i]);
-            int radius = r.width / 2;
-            if (std::abs(1 - ((double)r.width / r.height)) <= 0.2 &&
-                std::abs(1 - (area / (CV_PI * std::pow(radius, 2)))) <= 0.2)*/
             setLabel(dst, "CIR", contours[i]);
             cv::Rect r = cv::boundingRect(contours[i]);
             cv::Point pt(r.x + ((r.width) / 2), r.y + ((r.height) / 2));
@@ -337,15 +210,9 @@ void detectClock(string title, Mat image) {
         
         Point nearest;
         double len = 1000000.0;
-        fprintf(stderr, "%d %d \n", circ->x, circ->y);
         for (auto sq = squares.begin(); sq != squares.end(); sq++) {
             rectangle(dst, Point(sq->x, sq->y), Point(sq->x + sq->width, sq->y + sq->height), Scalar(0));
-            fprintf(stderr, "square: %d %d \n", sq->x, sq->y);
-            /*if (norm(*circ - *sq) < len) {
-                nearest = *sq;
-                len = norm(*circ - *sq);
-            }*/
-            
+        
             if (circ->x >= sq->x && circ->x <= sq->x + sq->width && circ->y >= sq->y && circ->y <= sq->y + sq->height ) {
                 squareCluster[*sq].push_back(*circ);
                 
@@ -354,8 +221,6 @@ void detectClock(string title, Mat image) {
             }
             
         }
-        //fprintf(stderr, "nearest: %d %d %d\n", nearest.x, nearest.y, squares.size());
-        //squareCluster[nearest].push_back(*circ);
     }
     
     int hist[6] = {0, 0, 0, 0, 0, 0};
@@ -386,8 +251,6 @@ void detectClock(string title, Mat image) {
    
     for (auto it = circles.begin(); it != circles.end(); it++) {
         addCluster(*it, norm(Point(r.width, r.height)));
-        
-        fprintf(stderr, "remaining: %d %d\n", it->x, it->y);
     }
     
     for(auto it = cluster.begin(); it != cluster.end(); it++) {
@@ -416,15 +279,8 @@ void detectClock(string title, Mat image) {
         
         Point nearest;
         double len = 1000000.0;
-        fprintf(stderr, "%d %d \n", circ->x, circ->y);
         for (auto sq = squares.begin(); sq != squares.end(); sq++) {
             rectangle(dst, Point(sq->x, sq->y), Point(sq->x + sq->width, sq->y + sq->height), Scalar(0));
-            fprintf(stderr, "square: %d %d \n", sq->x, sq->y);
-            /*if (norm(*circ - *sq) < len) {
-             nearest = *sq;
-             len = norm(*circ - *sq);
-             }*/
-            
             if (circ->x >= sq->x && circ->x <= sq->x + sq->width && circ->y >= sq->y && circ->y <= sq->y + sq->height ) {
                 squareCluster[*sq].push_back(*circ);
                 
@@ -433,8 +289,6 @@ void detectClock(string title, Mat image) {
             }
             
         }
-        //fprintf(stderr, "nearest: %d %d %d\n", nearest.x, nearest.y, squares.size());
-        //squareCluster[nearest].push_back(*circ);
     }
     
     for(auto it = squareCluster.begin(); it != squareCluster.end(); it++) {
@@ -443,17 +297,13 @@ void detectClock(string title, Mat image) {
             toput = 5;
         hist[toput]++;
         
-        fprintf(stderr, "%lu\n", it->second.size());
-        
     }
     
     
-    fprintf(stderr, "[%d, %d, %d, %d, %d, %d]\n", hist[0], hist[1], hist[2], hist[3], hist[4], hist[5]);
-   // printf("number is %d\n", num);
-    //imshow("dice", canny);
-    imshow("drawing", dst);
+    fprintf(stderr, "%s : [%d, %d, %d, %d, %d, %d]\n", title.c_str(), hist[0], hist[1], hist[2], hist[3], hist[4], hist[5]);
+    namedWindow(title.c_str());
+    imshow(title.c_str(), dst);
     waitKey();
-    
     
 }
 
@@ -468,9 +318,6 @@ int main(int argc, char** argv)
     for (auto it = imageMap.begin(); it != imageMap.end(); ++it) {
         detectClock(it->first, it->second);
     }
-    
-    //fprintf(stderr, "%f\n", atan2(1, 0));
-    
     
     waitKey();
     
