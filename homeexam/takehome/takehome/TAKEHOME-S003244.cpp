@@ -62,7 +62,8 @@ void addCluster(Point orientation, double threshold) {
             ysum += it2->y;
         }
         Point p = Point(xsum / it->second.size(), ysum / it->second.size());
-        if (cv::norm((p) - orientation) < threshold) {
+        fprintf(stderr, "wut: %d %d\n", p.x, p.y);
+        if (cv::norm((p) - orientation) < threshold/2) {
             cluster[it->first].push_back(orientation);
             found = true;
             break;
