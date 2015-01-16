@@ -121,7 +121,7 @@ void setLabel(cv::Mat& im, const std::string label, std::vector<cv::Point>& cont
     cv::putText(im, label, pt, fontface, scale, CV_RGB(0,0,0), thickness, 8);
 }
 
-static double angle(cv::Point pt1, cv::Point pt2, cv::Point pt0)
+double angle(cv::Point pt1, cv::Point pt2, cv::Point pt0)
 {
     double dx1 = pt1.x - pt0.x;
     double dy1 = pt1.y - pt0.y;
@@ -131,25 +131,10 @@ static double angle(cv::Point pt1, cv::Point pt2, cv::Point pt0)
 }
 
 
-
-
-void detectClock(string title, Mat image) {
-    dice = image;
-    cluster.clear();
-    squareCluster.clear();
-    squares.clear();
-    circles.clear();
-    clusters = 0;
-    
-    cv::Mat bw;
-    cv::threshold(dice, bw, 0, 255, CV_THRESH_TOZERO | CV_THRESH_OTSU);
-    cv::Canny(bw, bw, 70, 220);
-    dilate(bw, bw, Mat(), Point(-1, -1), 1, 1, 1);
-    // Find contours
+void findShapes(Mat& img, Mat dst) {
     std::vector<std::vector<cv::Point> > contours;
-    cv::findContours(bw.clone(), contours, CV_RETR_LIST, CV_CHAIN_APPROX_SIMPLE);
+    cv::findContours(img.clone(), contours, CV_RETR_LIST, CV_CHAIN_APPROX_SIMPLE);
     std::vector<cv::Point> approx;
-    cv::Mat dst = dice.clone();
     for (int i = 0; i < contours.size(); i++)
     {
         
@@ -200,30 +185,46 @@ void detectClock(string title, Mat image) {
             }
             
             if (!found)
-            circles.push_back(pt);
+                circles.push_back(pt);
         }
     }
 
+}
+
+
+void detectDice(string title, Mat image) {
+    dice = image;
+    cluster.clear();
+    squareCluster.clear();
+    squares.clear();
+    circles.clear();
+    clusters = 0;
+    
+    cv::Mat bw;
+    cv::threshold(dice, bw, 0, 255, CV_THRESH_TOZERO | CV_THRESH_OTSU);
+    cv::Canny(bw, bw, 70, 220);
+    dilate(bw, bw, Mat(), Point(-1, -1), 1, 1, 1);
+    
+    //Find contours, rectangles and circles
+    Mat dst = dice.clone();
+    findShapes(bw, dst);
     
     
+    
+    //Map circles in appropriate rectangles
     for(auto circ = circles.begin(); circ != circles.end(); circ++) {
-        
-        Point nearest;
-        double len = 1000000.0;
         for (auto sq = squares.begin(); sq != squares.end(); sq++) {
             rectangle(dst, Point(sq->x, sq->y), Point(sq->x + sq->width, sq->y + sq->height), Scalar(0));
-        
             if (circ->x >= sq->x && circ->x <= sq->x + sq->width && circ->y >= sq->y && circ->y <= sq->y + sq->height ) {
                 squareCluster[*sq].push_back(*circ);
-                
                 line(dst, *circ, Point(sq->x + ((sq->width) / 2), sq->y + ((sq->height) / 2)), Scalar(0,0,0));
                 break;
             }
-            
         }
     }
     
     
+    //Remove mapped circles since they are no longer needed
     for(auto it = squareCluster.begin(); it != squareCluster.end(); it++) {
         for (auto it2 = it->second.begin(); it2 != it->second.end(); it2++) {
             circles.erase(remove(circles.begin(), circles.end(), *it2), circles.end());
@@ -231,13 +232,12 @@ void detectClock(string title, Mat image) {
     }
     
     
-    //lambda rulez
+    //c++11 lambda rulez for sorting
     sort(circles.begin(), circles.end(),
          [](const Point & a, const Point & b) -> bool
     {
         return norm(a) < norm(b);
     });
-    
     
     
     
@@ -250,14 +250,15 @@ void detectClock(string title, Mat image) {
         }
     }
    
+    //Cluster free circles with threshold of any rectangle.
     for (auto it = circles.begin(); it != circles.end(); it++) {
         addCluster(*it, norm(Point(r.width, r.height)));
     }
     
+    
+    //Put rectangles centered on the average of clusters.
     for(auto it = cluster.begin(); it != cluster.end(); it++) {
-        
         Rect newrect;
-        
         int xsum = 0;
         int ysum = 0;
         for (auto it2 = it->second.begin(); it2 != it->second.end(); it2++) {
@@ -271,17 +272,17 @@ void detectClock(string title, Mat image) {
         newrect.height = r.height;
         
         rectangle(dst, Point(newrect.x, newrect.y), Point(newrect.x + newrect.width, newrect.y + newrect.height), Scalar(0));
-        
         squares.push_back(newrect);
-        
     }
     
+    
+    
+    //Put the free circles in our new rectangles.
     for(auto circ = circles.begin(); circ != circles.end(); circ++) {
         for (auto sq = squares.begin(); sq != squares.end(); sq++) {
             rectangle(dst, Point(sq->x, sq->y), Point(sq->x + sq->width, sq->y + sq->height), Scalar(0));
             if (circ->x >= sq->x && circ->x <= sq->x + sq->width && circ->y >= sq->y && circ->y <= sq->y + sq->height ) {
                 squareCluster[*sq].push_back(*circ);
-                
                 line(dst, *circ, Point(sq->x + ((sq->width) / 2), sq->y + ((sq->height) / 2)), Scalar(0,0,0));
                 break;
             }
@@ -290,8 +291,8 @@ void detectClock(string title, Mat image) {
     }
     
     
+    //Put the dice in histogram
     int hist[6] = {0, 0, 0, 0, 0, 0};
-    
     for(auto it = squareCluster.begin(); it != squareCluster.end(); it++) {
         int toput = it->second.size() - 1;
         if (toput > 5)
@@ -304,7 +305,6 @@ void detectClock(string title, Mat image) {
     fprintf(stderr, "%s : [%d, %d, %d, %d, %d, %d]\n", title.c_str(), hist[0], hist[1], hist[2], hist[3], hist[4], hist[5]);
     namedWindow(title.c_str());
     imshow(title.c_str(), dst);
-    waitKey();
     
 }
 
@@ -317,7 +317,7 @@ int main(int argc, char** argv)
     traverseImages("./test");
     
     for (auto it = imageMap.begin(); it != imageMap.end(); ++it) {
-        detectClock(it->first, it->second);
+        detectDice(it->first, it->second);
     }
     
     waitKey();
