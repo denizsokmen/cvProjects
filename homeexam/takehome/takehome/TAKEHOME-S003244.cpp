@@ -17,6 +17,12 @@ using namespace std;
 
 #define PI 3.14159265
 
+struct mapPointComparator {
+    bool operator()(const Point& a, const Point& b) const {
+        return norm(a) < norm(b);
+    }
+};
+
 int p1, p2;
 Mat dice, canny;
 int clusters = 0;
@@ -24,6 +30,9 @@ map<string, Mat> imageMap= map<string, Mat>();
 map<int, vector<Point>> cluster = map <int, vector<Point>>();
 map<double, double> clusterLengths = map<double, double>();
 vector<double> results = vector<double>();
+map<Point, vector<Point>, mapPointComparator> squareCluster = map<Point,vector<Point>,mapPointComparator>();
+vector<Point> circles = vector<Point>();
+vector<Point> squares = vector<Point>();
 
 RNG rng(12345);
 
@@ -186,6 +195,9 @@ static double angle(cv::Point pt1, cv::Point pt2, cv::Point pt0)
     return (dx1*dx2 + dy1*dy2)/sqrt((dx1*dx1 + dy1*dy1)*(dx2*dx2 + dy2*dy2) + 1e-10);
 }
 
+
+
+
 void detectClock(string title, Mat image) {
     /*Mat dst, cdst;
      bitwise_not(image, image);
@@ -262,7 +274,8 @@ void detectClock(string title, Mat image) {
  
     // Use Canny instead of threshold to catch squares with gradient shading
     cv::Mat bw;
-    cv::Canny(dice, bw, 20, 100);
+    cv::threshold(dice, bw, 0, 255, CV_THRESH_TOZERO | CV_THRESH_OTSU);
+    cv::Canny(bw, bw, 70, 220);
     // Find contours
     std::vector<std::vector<cv::Point> > contours;
     cv::findContours(bw.clone(), contours, CV_RETR_LIST, CV_CHAIN_APPROX_SIMPLE);
@@ -295,8 +308,20 @@ void detectClock(string title, Mat image) {
             double maxcos = cos.back();
             // Use the degrees obtained above and the number of vertices
             // to determine the shape of the contour
-            if (vtc == 4 && mincos >= -0.1 && maxcos <= 0.3)
+            if (vtc == 4 && mincos >= -0.1 && maxcos <= 0.3) {
                 setLabel(dst, "RECT", contours[i]);
+                cv::Rect r = cv::boundingRect(contours[i]);
+                cv::Point pt(r.x + ((r.width) / 2), r.y + ((r.height) / 2));
+                bool found = false;
+                
+                for (auto it = squares.begin(); it != squares.end(); it++) {
+                    if (norm(*it - pt) < 5)
+                        found = true;
+                }
+                
+                if (!found)
+                    squares.push_back(pt);
+            }
             else if (vtc == 5 && mincos >= -0.34 && maxcos <= -0.27)
                 setLabel(dst, "PENTA", contours[i]);
             else if (vtc == 6 && mincos >= -0.55 && maxcos <= -0.45)
@@ -310,14 +335,43 @@ void detectClock(string title, Mat image) {
             int radius = r.width / 2;
             if (std::abs(1 - ((double)r.width / r.height)) <= 0.2 &&
                 std::abs(1 - (area / (CV_PI * std::pow(radius, 2)))) <= 0.2)*/
-                setLabel(dst, "CIR", contours[i]);
+            setLabel(dst, "CIR", contours[i]);
+            cv::Rect r = cv::boundingRect(contours[i]);
+            cv::Point pt(r.x + ((r.width) / 2), r.y + ((r.height) / 2));
+            bool found = false;
+            
+            for (auto it = circles.begin(); it != circles.end(); it++) {
+                if (norm(*it - pt) < 5)
+                    found = true;
+            }
+            
+            if (!found)
+            circles.push_back(pt);
         }
     }
 
     
+    
+    for(auto circ = circles.begin(); circ != circles.end(); circ++) {
+        
+        Point nearest;
+        double len = 1000000.0;
+        fprintf(stderr, "%d %d \n", circ->x, circ->y);
+        for (auto sq = squares.begin(); sq != squares.end(); sq++) {
+            fprintf(stderr, "square: %d %d \n", sq->x, sq->y);
+            if (norm(*circ - *sq) < len) {
+                nearest = *sq;
+                len = norm(*circ - *sq);
+            }
+        }
+        fprintf(stderr, "nearest: %d %d %d\n", nearest.x, nearest.y, squares.size());
+        line(dst, *circ, nearest, Scalar(0));
+        squareCluster[nearest].push_back(*circ);
+    }
+    
     int hist[6] = {0, 0, 0, 0, 0, 0};
     
-    for(auto it = cluster.begin(); it != cluster.end(); it++) {
+    for(auto it = squareCluster.begin(); it != squareCluster.end(); it++) {
         int toput = it->second.size() - 1;
         if (toput > 5)
             toput = 5;
@@ -326,6 +380,7 @@ void detectClock(string title, Mat image) {
         fprintf(stderr, "%lu\n", it->second.size());
         
     }
+    
     
     fprintf(stderr, "[%d, %d, %d, %d, %d, %d]\n", hist[0], hist[1], hist[2], hist[3], hist[4], hist[5]);
     printf("number is %d\n", num);
