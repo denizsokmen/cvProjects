@@ -6,7 +6,7 @@
 
 #IncludeRegexTransform: 
 
-/home/deniz/programming/cvProjects/homeexam/TAKEHOME-S003244.cpp
+/Users/denizsokmen/Desktop/programlama/cvProjects/homeexam/TAKEHOME-S003244.cpp
 opencv2/highgui/highgui.hpp
 -
 opencv2/imgproc/imgproc.hpp

@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>IDESourceControlProjectFavoriteDictionaryKey</key>
+	<false/>
+	<key>IDESourceControlProjectIdentifier</key>
+	<string>839B0E8D-9883-4D02-8FFC-067BB5991885</string>
+	<key>IDESourceControlProjectName</key>
+	<string>takehome</string>
+	<key>IDESourceControlProjectOriginsDictionary</key>
+	<dict>
+		<key>563CE9BA450DB75BAD6DB254739D7BA7172DA944</key>
+		<string>https://github.com/denizsokmen/cvProjects.git</string>
+	</dict>
+	<key>IDESourceControlProjectPath</key>
+	<string>homeexam/takehome/takehome.xcodeproj</string>
+	<key>IDESourceControlProjectRelativeInstallPathDictionary</key>
+	<dict>
+		<key>563CE9BA450DB75BAD6DB254739D7BA7172DA944</key>
+		<string>../../../..</string>
+	</dict>
+	<key>IDESourceControlProjectURL</key>
+	<string>https://github.com/denizsokmen/cvProjects.git</string>
+	<key>IDESourceControlProjectVersion</key>
+	<integer>111</integer>
+	<key>IDESourceControlProjectWCCIdentifier</key>
+	<string>563CE9BA450DB75BAD6DB254739D7BA7172DA944</string>
+	<key>IDESourceControlProjectWCConfigurations</key>
+	<array>
+		<dict>
+			<key>IDESourceControlRepositoryExtensionIdentifierKey</key>
+			<string>public.vcs.git</string>
+			<key>IDESourceControlWCCIdentifierKey</key>
+			<string>563CE9BA450DB75BAD6DB254739D7BA7172DA944</string>
+			<key>IDESourceControlWCCName</key>
+			<string>cvProjects</string>
+		</dict>
+	</array>
+</dict>
+</plist>
