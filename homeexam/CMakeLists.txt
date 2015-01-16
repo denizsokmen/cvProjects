@@ -1,0 +1,8 @@
+cmake_minimum_required(VERSION 2.8.4)
+project(TAKEHOME-S003244)
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
+set(SOURCE_FILES TAKEHOME-S003244.cpp)
+include_directories(${OpenCV_INCLUDE_DIRS})
+add_executable(TAKEHOME-S003244 TAKEHOME-S003244.cpp)
+find_package( OpenCV REQUIRED )
+target_link_libraries(TAKEHOME-S003244 ${OpenCV_LIBS} )
