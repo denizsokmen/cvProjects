@@ -19,7 +19,7 @@ using namespace std;
 
 struct mapPointComparator {
     bool operator()(const Rect& a, const Rect& b) const {
-        return a.x < b.x;
+        return a.x < b.x || a.y < b.y;
     }
 };
 
@@ -44,7 +44,7 @@ void help()
 }
 
 
-void addCluster(Point orientation) {
+void addCluster(Point orientation, double threshold) {
     if (cluster.empty()) {
         cluster[clusters++].push_back(orientation);
         
@@ -54,13 +54,20 @@ void addCluster(Point orientation) {
     
     bool found = false;
     for(auto it = cluster.begin(); it != cluster.end(); ++it) {
-        for(auto it2 = it->second.begin(); it2 != it->second.end(); ++it2) {
-            if (cv::norm((*it2) - orientation) < 60) {
-                cluster[it->first].push_back(orientation);
-                found = true;
-                break;
-            }
+        
+        int xsum = 0;
+        int ysum = 0;
+        for (auto it2 = it->second.begin(); it2 != it->second.end(); it2++) {
+            xsum += it2->x;
+            ysum += it2->y;
         }
+        Point p = Point(xsum / it->second.size(), ysum / it->second.size());
+        if (cv::norm((p) - orientation) < threshold) {
+            cluster[it->first].push_back(orientation);
+            found = true;
+            break;
+        }
+        
     }
     
     if (!found) {
@@ -244,33 +251,7 @@ void detectClock(string title, Mat image) {
      
      imshow(title, cdst);*/
     dice = image;
-    p1 = 100;
-    p2 = 200;
-    cv::threshold(dice, canny, 0, 255, CV_THRESH_TOZERO | CV_THRESH_OTSU);
-    Canny(canny, canny, 20 , 200);
-    dilate(canny, canny, Mat(), Point(-1, -1), 1, 1, 1);
-    imshow("canny", canny);
-    createTrackbar("p1","canny",&p1,1000,on_trackbar);
-    createTrackbar("p2","canny",&p2,1000,on_trackbar);
-    waitKey();
-    int num = 0;
-    for(int y=0;y<canny.size().height;y++)
-    {
-        uchar *row = canny.ptr(y);
-        for(int x=0;x<canny.size().width;x++)
-        {
-            if(row[x] <= 128)
-            {
-                int area = floodFill(canny, Point(x,y), CV_RGB(0,0,160));
-                printf("filling %d, %d gray, area is %d\n", x, y, area);
-                if(area>10 && area < 350) {
-                    
-                    addCluster(Point(x,y));
-                    num++;
-                }
-            }
-        }
-    }
+
     
     
  
@@ -318,17 +299,13 @@ void detectClock(string title, Mat image) {
                 bool found = false;
                 
                 for (auto it = squares.begin(); it != squares.end(); it++) {
-                    if (norm(Point(it->x, it->y) - Point(r.x, r.y)) < 5)
+                    if (norm(Point(it->x, it->y) - Point(r.x, r.y)) < 10)
                         found = true;
                 }
                 
                 if (!found)
                     squares.push_back(r);
             }
-            else if (vtc == 5 && mincos >= -0.34 && maxcos <= -0.27)
-                setLabel(dst, "PENTA", contours[i]);
-            else if (vtc == 6 && mincos >= -0.55 && maxcos <= -0.45)
-                setLabel(dst, "HEXA", contours[i]);
         }
         else
         {
@@ -361,6 +338,7 @@ void detectClock(string title, Mat image) {
         double len = 1000000.0;
         fprintf(stderr, "%d %d \n", circ->x, circ->y);
         for (auto sq = squares.begin(); sq != squares.end(); sq++) {
+            rectangle(dst, Point(sq->x, sq->y), Point(sq->x + sq->width, sq->y + sq->height), Scalar(0));
             fprintf(stderr, "square: %d %d \n", sq->x, sq->y);
             /*if (norm(*circ - *sq) < len) {
                 nearest = *sq;
@@ -369,7 +347,9 @@ void detectClock(string title, Mat image) {
             
             if (circ->x >= sq->x && circ->x <= sq->x + sq->width && circ->y >= sq->y && circ->y <= sq->y + sq->height ) {
                 squareCluster[*sq].push_back(*circ);
-                line(dst, *circ, Point(sq->x + ((sq->width) / 2), sq->y + ((sq->height) / 2)), Scalar(0));
+                
+                line(dst, *circ, Point(sq->x + ((sq->width) / 2), sq->y + ((sq->height) / 2)), Scalar(0,0,0));
+                break;
             }
             
         }
@@ -378,6 +358,83 @@ void detectClock(string title, Mat image) {
     }
     
     int hist[6] = {0, 0, 0, 0, 0, 0};
+    
+    for(auto it = squareCluster.begin(); it != squareCluster.end(); it++) {
+        for (auto it2 = it->second.begin(); it2 != it->second.end(); it2++) {
+            circles.erase(remove(circles.begin(), circles.end(), *it2), circles.end());
+        }
+    }
+    
+    
+    //lambda rulez
+    sort(circles.begin(), circles.end(),
+         [](const Point & a, const Point & b) -> bool
+    {
+        return norm(a) < norm(b);
+    });
+    
+    
+    Rect r;
+    
+    for(auto it = squares.begin(); it != squares.end(); it++) {
+        if (squareCluster[*it].size() > 0) {
+            r = *it;
+            break;
+        }
+    }
+   
+    for (auto it = circles.begin(); it != circles.end(); it++) {
+        addCluster(*it, norm(Point(r.width, r.height)));
+        
+        fprintf(stderr, "remaining: %d %d\n", it->x, it->y);
+    }
+    
+    for(auto it = cluster.begin(); it != cluster.end(); it++) {
+        
+        Rect newrect;
+        
+        int xsum = 0;
+        int ysum = 0;
+        for (auto it2 = it->second.begin(); it2 != it->second.end(); it2++) {
+            xsum += it2->x;
+            ysum += it2->y;
+        }
+        
+        newrect.x = xsum/it->second.size() - r.width/2;
+        newrect.y = ysum/it->second.size() - r.height/2;
+        newrect.width = r.width;
+        newrect.height = r.height;
+        
+        rectangle(dst, Point(newrect.x, newrect.y), Point(newrect.x + newrect.width, newrect.y + newrect.height), Scalar(0));
+        
+        squares.push_back(newrect);
+        
+    }
+    
+    for(auto circ = circles.begin(); circ != circles.end(); circ++) {
+        
+        Point nearest;
+        double len = 1000000.0;
+        fprintf(stderr, "%d %d \n", circ->x, circ->y);
+        for (auto sq = squares.begin(); sq != squares.end(); sq++) {
+            rectangle(dst, Point(sq->x, sq->y), Point(sq->x + sq->width, sq->y + sq->height), Scalar(0));
+            fprintf(stderr, "square: %d %d \n", sq->x, sq->y);
+            /*if (norm(*circ - *sq) < len) {
+             nearest = *sq;
+             len = norm(*circ - *sq);
+             }*/
+            
+            if (circ->x >= sq->x && circ->x <= sq->x + sq->width && circ->y >= sq->y && circ->y <= sq->y + sq->height ) {
+                squareCluster[*sq].push_back(*circ);
+                
+                line(dst, *circ, Point(sq->x + ((sq->width) / 2), sq->y + ((sq->height) / 2)), Scalar(0,0,0));
+                break;
+            }
+            
+        }
+        //fprintf(stderr, "nearest: %d %d %d\n", nearest.x, nearest.y, squares.size());
+        //squareCluster[nearest].push_back(*circ);
+    }
     
     for(auto it = squareCluster.begin(); it != squareCluster.end(); it++) {
         int toput = it->second.size() - 1;
@@ -391,8 +448,8 @@ void detectClock(string title, Mat image) {
     
     
     fprintf(stderr, "[%d, %d, %d, %d, %d, %d]\n", hist[0], hist[1], hist[2], hist[3], hist[4], hist[5]);
-    printf("number is %d\n", num);
-    imshow("dice", canny);
+   // printf("number is %d\n", num);
+    //imshow("dice", canny);
     imshow("drawing", dst);
     waitKey();
     

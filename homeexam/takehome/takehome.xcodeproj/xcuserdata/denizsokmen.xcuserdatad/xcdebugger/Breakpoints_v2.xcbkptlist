@@ -10,27 +10,11 @@
             ignoreCount = "0"
             continueAfterRunningActions = "No"
             filePath = "takehome/TAKEHOME-S003244.cpp"
-            timestampString = "443123611.933252"
+            timestampString = "443133134.848029"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "247"
-            endingLineNumber = "247"
-            landmarkName = "detectClock(string title, Mat image)"
-            landmarkType = "7">
-         </BreakpointContent>
-      </BreakpointProxy>
-      <BreakpointProxy
-         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
-         <BreakpointContent
-            shouldBeEnabled = "No"
-            ignoreCount = "0"
-            continueAfterRunningActions = "No"
-            filePath = "takehome/TAKEHOME-S003244.cpp"
-            timestampString = "443125324.815954"
-            startingColumnNumber = "9223372036854775807"
-            endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "365"
-            endingLineNumber = "365"
+            startingLineNumber = "343"
+            endingLineNumber = "343"
             landmarkName = "detectClock(string title, Mat image)"
             landmarkType = "7">
          </BreakpointContent>
