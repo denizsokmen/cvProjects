@@ -223,7 +223,6 @@ void detectClock(string title, Mat image) {
         }
     }
     
-    int hist[6] = {0, 0, 0, 0, 0, 0};
     
     for(auto it = squareCluster.begin(); it != squareCluster.end(); it++) {
         for (auto it2 = it->second.begin(); it2 != it->second.end(); it2++) {
@@ -240,8 +239,10 @@ void detectClock(string title, Mat image) {
     });
     
     
-    Rect r;
     
+    
+    //Pick a rectangle that has an element inside
+    Rect r;
     for(auto it = squares.begin(); it != squares.end(); it++) {
         if (squareCluster[*it].size() > 0) {
             r = *it;
@@ -276,9 +277,6 @@ void detectClock(string title, Mat image) {
     }
     
     for(auto circ = circles.begin(); circ != circles.end(); circ++) {
-        
-        Point nearest;
-        double len = 1000000.0;
         for (auto sq = squares.begin(); sq != squares.end(); sq++) {
             rectangle(dst, Point(sq->x, sq->y), Point(sq->x + sq->width, sq->y + sq->height), Scalar(0));
             if (circ->x >= sq->x && circ->x <= sq->x + sq->width && circ->y >= sq->y && circ->y <= sq->y + sq->height ) {
@@ -290,6 +288,9 @@ void detectClock(string title, Mat image) {
             
         }
     }
+    
+    
+    int hist[6] = {0, 0, 0, 0, 0, 0};
     
     for(auto it = squareCluster.begin(); it != squareCluster.end(); it++) {
         int toput = it->second.size() - 1;
