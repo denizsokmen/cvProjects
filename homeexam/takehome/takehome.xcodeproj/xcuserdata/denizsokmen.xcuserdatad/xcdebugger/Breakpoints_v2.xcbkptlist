@@ -10,11 +10,11 @@
             ignoreCount = "0"
             continueAfterRunningActions = "No"
             filePath = "takehome/TAKEHOME-S003244.cpp"
-            timestampString = "443087994.98969"
+            timestampString = "443113748.857283"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "212"
-            endingLineNumber = "212"
+            startingLineNumber = "234"
+            endingLineNumber = "234"
             landmarkName = "detectClock(string title, Mat image)"
             landmarkType = "7">
          </BreakpointContent>
