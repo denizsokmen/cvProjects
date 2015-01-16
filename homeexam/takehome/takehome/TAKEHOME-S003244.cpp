@@ -18,8 +18,8 @@ using namespace std;
 #define PI 3.14159265
 
 struct mapPointComparator {
-    bool operator()(const Point& a, const Point& b) const {
-        return norm(a) < norm(b);
+    bool operator()(const Rect& a, const Rect& b) const {
+        return a.x < b.x;
     }
 };
 
@@ -30,9 +30,9 @@ map<string, Mat> imageMap= map<string, Mat>();
 map<int, vector<Point>> cluster = map <int, vector<Point>>();
 map<double, double> clusterLengths = map<double, double>();
 vector<double> results = vector<double>();
-map<Point, vector<Point>, mapPointComparator> squareCluster = map<Point,vector<Point>,mapPointComparator>();
+map<Rect, vector<Point>, mapPointComparator> squareCluster = map<Rect,vector<Point>, mapPointComparator>();
 vector<Point> circles = vector<Point>();
-vector<Point> squares = vector<Point>();
+vector<Rect> squares = vector<Rect>();
 
 RNG rng(12345);
 
@@ -164,8 +164,9 @@ void FindBlobs(const cv::Mat &binary, std::vector < std::vector<cv::Point2i> > &
 }
 
 void on_trackbar(int, void*) {
-    Canny(dice, canny, p1, p2);
-    dilate(canny, canny, Mat(), Point(-1, -1), 1, 1, 1);
+    
+    cv::threshold(dice, canny, 0, 255, CV_THRESH_TOZERO | CV_THRESH_OTSU);
+    Canny(canny, canny, p1, p2);
     /*dilate(canny, canny, Mat(), Point(-1, -1), 1, 1, 1);
      dilate(canny, canny, Mat(), Point(-1, -1), 1, 1, 1);
      dilate(canny, canny, Mat(), Point(-1, -1), 1, 1, 1);
@@ -245,8 +246,9 @@ void detectClock(string title, Mat image) {
     dice = image;
     p1 = 100;
     p2 = 200;
-    cv::threshold(dice, canny, 0.0, 1.0, cv::THRESH_BINARY);
+    cv::threshold(dice, canny, 0, 255, CV_THRESH_TOZERO | CV_THRESH_OTSU);
     Canny(canny, canny, 20 , 200);
+    dilate(canny, canny, Mat(), Point(-1, -1), 1, 1, 1);
     imshow("canny", canny);
     createTrackbar("p1","canny",&p1,1000,on_trackbar);
     createTrackbar("p2","canny",&p2,1000,on_trackbar);
@@ -276,6 +278,7 @@ void detectClock(string title, Mat image) {
     cv::Mat bw;
     cv::threshold(dice, bw, 0, 255, CV_THRESH_TOZERO | CV_THRESH_OTSU);
     cv::Canny(bw, bw, 70, 220);
+    dilate(bw, bw, Mat(), Point(-1, -1), 1, 1, 1);
     // Find contours
     std::vector<std::vector<cv::Point> > contours;
     cv::findContours(bw.clone(), contours, CV_RETR_LIST, CV_CHAIN_APPROX_SIMPLE);
@@ -315,12 +318,12 @@ void detectClock(string title, Mat image) {
                 bool found = false;
                 
                 for (auto it = squares.begin(); it != squares.end(); it++) {
-                    if (norm(*it - pt) < 5)
+                    if (norm(Point(it->x, it->y) - Point(r.x, r.y)) < 5)
                         found = true;
                 }
                 
                 if (!found)
-                    squares.push_back(pt);
+                    squares.push_back(r);
             }
             else if (vtc == 5 && mincos >= -0.34 && maxcos <= -0.27)
                 setLabel(dst, "PENTA", contours[i]);
@@ -359,14 +362,19 @@ void detectClock(string title, Mat image) {
         fprintf(stderr, "%d %d \n", circ->x, circ->y);
         for (auto sq = squares.begin(); sq != squares.end(); sq++) {
             fprintf(stderr, "square: %d %d \n", sq->x, sq->y);
-            if (norm(*circ - *sq) < len) {
+            /*if (norm(*circ - *sq) < len) {
                 nearest = *sq;
                 len = norm(*circ - *sq);
+            }*/
+            
+            if (circ->x >= sq->x && circ->x <= sq->x + sq->width && circ->y >= sq->y && circ->y <= sq->y + sq->height ) {
+                squareCluster[*sq].push_back(*circ);
+                line(dst, *circ, Point(sq->x + ((sq->width) / 2), sq->y + ((sq->height) / 2)), Scalar(0));
             }
+            
         }
-        fprintf(stderr, "nearest: %d %d %d\n", nearest.x, nearest.y, squares.size());
-        line(dst, *circ, nearest, Scalar(0));
-        squareCluster[nearest].push_back(*circ);
+        //fprintf(stderr, "nearest: %d %d %d\n", nearest.x, nearest.y, squares.size());
+        //squareCluster[nearest].push_back(*circ);
     }
     
     int hist[6] = {0, 0, 0, 0, 0, 0};
