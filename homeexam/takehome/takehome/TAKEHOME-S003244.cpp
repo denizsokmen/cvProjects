@@ -19,9 +19,9 @@ using namespace std;
 
 int p1, p2;
 Mat dice, canny;
-
+int clusters = 0;
 map<string, Mat> imageMap= map<string, Mat>();
-map<double, vector<double>> cluster = map <double, vector<double>>();
+map<int, vector<Point>> cluster = map <int, vector<Point>>();
 map<double, double> clusterLengths = map<double, double>();
 vector<double> results = vector<double>();
 
@@ -30,67 +30,33 @@ RNG rng(12345);
 void help()
 {
     cout << "\nThis program demonstrates line finding with the Hough transform.\n"
-	"Usage:\n"
-	"./houghlines <image_name>, Default is pic1.jpg\n" << endl;
+    "Usage:\n"
+    "./houghlines <image_name>, Default is pic1.jpg\n" << endl;
 }
 
-void normalize_point(Vec2d &point) {
-    double norm = cv::norm(point);
-    point[0] /= norm;
-    point[1] /= norm;
-}
 
-void addCluster(double orientation, double length) {
+void addCluster(Point orientation) {
     if (cluster.empty()) {
-	cluster[orientation].push_back(orientation);
-
-	if (length > clusterLengths[orientation]) {
-	    clusterLengths[orientation] = length;
-	}
-
-	return;
+        cluster[clusters++].push_back(orientation);
+        
+        
+        return;
     }
-    double threshold = 20 * PI / 180.0;
+    
     bool found = false;
     for(auto it = cluster.begin(); it != cluster.end(); ++it) {
-	if (abs(it->first - orientation) < threshold) {
-	    cluster[it->first].push_back(orientation);
-	    if (length > clusterLengths[it->first]) {
-		clusterLengths[it->first] = length;
-	    }
-	    found = true;
-	    break;
-	}
+        for(auto it2 = it->second.begin(); it2 != it->second.end(); ++it2) {
+            if (cv::norm((*it2) - orientation) < 50) {
+                cluster[it->first].push_back(orientation);
+                found = true;
+                break;
+            }
+        }
     }
     
     if (!found) {
-	cluster[orientation].push_back(orientation);
-	if (length > clusterLengths[orientation]) {
-	    clusterLengths[orientation] = length;
-	}
+        cluster[clusters++].push_back(orientation);
     }
-}
-
-int pointToLineDist(Vec2d begin, Vec2d end, Vec2d point) {
-    Vec2d AC = point - begin;
-    Vec2d unitVec = end - begin;
-    //cv::normalize(unitVec);
-    normalize_point(unitVec);
-    // unitVec = cv::normalize(unitVec);
-    double norm = cv::norm(end-begin);
-    //fprintf(stderr, "(%f, %f)\n", unitVec[0], unitVec[1]);
-    double res = unitVec.dot(AC);
-    
-    // fprintf(stderr, "%f\n", res);
-    if (res < 0) return cv::norm(point - begin);
-
-    if (res > norm) return cv::norm(point - end);
-    
-    unitVec *= norm;
-    
-    Vec2d pointOnLine = begin + unitVec;
-    
-    return cv::norm(point - pointOnLine);
 }
 
 int traverseImages(string dir)
@@ -98,69 +64,50 @@ int traverseImages(string dir)
     DIR *dp;
     struct dirent *dirp;
     if((dp = opendir(dir.c_str())) == NULL) {
-	return errno;
+        return errno;
     }
-
+    
     while ((dirp = readdir(dp)) != NULL) {
-	if (dirp->d_type & DT_DIR) {
-	    char path[1024];
-	    int len = snprintf(path, sizeof(path)-1, "%s/%s", dir.c_str(), dirp->d_name);
-	    path[len] = 0;
-	    if (strcmp(dirp->d_name, ".") == 0 || strcmp(dirp->d_name, "..") == 0)
-		continue;
-
-	    traverseImages(path);
-	}
-	else {
-
-	    int len = strlen(dirp->d_name);
-        
-        if (strncmp(dirp->d_name, ".", 1) == 0)
-            continue;
-
-	    if (len >= 4) {
-		char path[1024];
-		int len = snprintf(path, sizeof(path)-1, "%s/%s", dir.c_str(), dirp->d_name);
-		Mat histogram = imread(path, 0);
-
-		imageMap[dirp->d_name] = histogram;
-//		if (histogram.size().width < 400) {
-		    Size size(500, 500);
-		    Mat dest;
-		    // erode(histogram, histogram, Mat(), Point(-1, -1), 1, 1, 1);
-		    resize(histogram, dest, size);
-		    imageMap[dirp->d_name] = dest;
-		    //	}
-	    }
-
-	    // fprintf(stderr, "%s\n", dirp->d_name);
-
-	}
+        if (dirp->d_type & DT_DIR) {
+            char path[1024];
+            int len = snprintf(path, sizeof(path)-1, "%s/%s", dir.c_str(), dirp->d_name);
+            path[len] = 0;
+            if (strcmp(dirp->d_name, ".") == 0 || strcmp(dirp->d_name, "..") == 0)
+                continue;
+            
+            traverseImages(path);
+        }
+        else {
+            
+            int len = strlen(dirp->d_name);
+            
+            if (strncmp(dirp->d_name, ".", 1) == 0)
+                continue;
+            
+            if (len >= 4) {
+                char path[1024];
+                int len = snprintf(path, sizeof(path)-1, "%s/%s", dir.c_str(), dirp->d_name);
+                Mat histogram = imread(path, 0);
+                
+                imageMap[dirp->d_name] = histogram;
+                //		if (histogram.size().width < 400) {
+                Size size(500, 500);
+                Mat dest;
+                // erode(histogram, histogram, Mat(), Point(-1, -1), 1, 1, 1);
+                resize(histogram, dest, size);
+                imageMap[dirp->d_name] = dest;
+                //	}
+            }
+            
+            // fprintf(stderr, "%s\n", dirp->d_name);
+            
+        }
     }
     closedir(dp);
     return 0;
 }
 
 
-// Ending point is further
-void swapLineEnding(Vec4i &line,  Vec2i center) {
-    Vec2i begin(line[0], line[1]);
-    Vec2i end(line[2], line[3]);
-    if (norm(begin, center) > norm(end, center)) {
-	line[0] = end[0];
-	line[1] = end[1];
-	line[2] = begin[0];
-	line[3] = begin[1];
-    }
-    else {
-	line[2] = end[0];
-	line[3] = end[1];
-	line[0] = begin[0];
-	line[1] = begin[1];
-    }
-    
-    
-}
 
 
 void FindBlobs(const cv::Mat &binary, std::vector < std::vector<cv::Point2i> > &blobs)
@@ -211,55 +158,55 @@ void on_trackbar(int, void*) {
     Canny(dice, canny, p1, p2);
     dilate(canny, canny, Mat(), Point(-1, -1), 1, 1, 1);
     /*dilate(canny, canny, Mat(), Point(-1, -1), 1, 1, 1);
-    dilate(canny, canny, Mat(), Point(-1, -1), 1, 1, 1);
-    dilate(canny, canny, Mat(), Point(-1, -1), 1, 1, 1);
-    dilate(canny, canny, Mat(), Point(-1, -1), 1, 1, 1);*/
+     dilate(canny, canny, Mat(), Point(-1, -1), 1, 1, 1);
+     dilate(canny, canny, Mat(), Point(-1, -1), 1, 1, 1);
+     dilate(canny, canny, Mat(), Point(-1, -1), 1, 1, 1);*/
     imshow("canny", canny);
 }
 
 void detectClock(string title, Mat image) {
     /*Mat dst, cdst;
      bitwise_not(image, image);
-      cv::threshold(image, cdst, 0, 255, CV_THRESH_TOZERO | CV_THRESH_OTSU);
-    //dilate(dst, dst, Mat(), Point(-1, -1), 1, 1, 1);
+     cv::threshold(image, cdst, 0, 255, CV_THRESH_TOZERO | CV_THRESH_OTSU);
+     //dilate(dst, dst, Mat(), Point(-1, -1), 1, 1, 1);
      //  dilate(dst, dst, Mat(), Point(-1, -1), 1, 1, 1);
-    
-      Canny(image, image, 60, 150, 3);
-    
-    
-    //dilate(image, image, Mat(), Point(-1, -1), 1, 1, 1);
-  
-       cvtColor(image, cdst, CV_GRAY2BGR);
-    
-    cv::Mat output = cv::Mat::zeros(image.size(), CV_8UC3);
-    
-    cv::Mat binary;
-    std::vector < std::vector<cv::Point2i > > blobs;
-    
-    cv::threshold(image, binary, 0.0, 1.0, cv::THRESH_BINARY);
-    
-    FindBlobs(binary, blobs);
-    
-    // Randomy color the blobs
-    for(size_t i=0; i < blobs.size(); i++) {
-        unsigned char r = 255 * (rand()/(1.0 + RAND_MAX));
-        unsigned char g = 255 * (rand()/(1.0 + RAND_MAX));
-        unsigned char b = 255 * (rand()/(1.0 + RAND_MAX));
-        
-        for(size_t j=0; j < blobs[i].size(); j++) {
-            int x = blobs[i][j].x;
-            int y = blobs[i][j].y;
-            
-            output.at<cv::Vec3b>(y,x)[0] = b;
-            output.at<cv::Vec3b>(y,x)[1] = g;
-            output.at<cv::Vec3b>(y,x)[2] = r;
-        }
-    }
-    
-    cv::imshow("binary", image);
-    cv::imshow("labelled", output);
-    cv::waitKey(0);
-  
+     
+     Canny(image, image, 60, 150, 3);
+     
+     
+     //dilate(image, image, Mat(), Point(-1, -1), 1, 1, 1);
+     
+     cvtColor(image, cdst, CV_GRAY2BGR);
+     
+     cv::Mat output = cv::Mat::zeros(image.size(), CV_8UC3);
+     
+     cv::Mat binary;
+     std::vector < std::vector<cv::Point2i > > blobs;
+     
+     cv::threshold(image, binary, 0.0, 1.0, cv::THRESH_BINARY);
+     
+     FindBlobs(binary, blobs);
+     
+     // Randomy color the blobs
+     for(size_t i=0; i < blobs.size(); i++) {
+     unsigned char r = 255 * (rand()/(1.0 + RAND_MAX));
+     unsigned char g = 255 * (rand()/(1.0 + RAND_MAX));
+     unsigned char b = 255 * (rand()/(1.0 + RAND_MAX));
+     
+     for(size_t j=0; j < blobs[i].size(); j++) {
+     int x = blobs[i][j].x;
+     int y = blobs[i][j].y;
+     
+     output.at<cv::Vec3b>(y,x)[0] = b;
+     output.at<cv::Vec3b>(y,x)[1] = g;
+     output.at<cv::Vec3b>(y,x)[2] = r;
+     }
+     }
+     
+     cv::imshow("binary", image);
+     cv::imshow("labelled", output);
+     cv::waitKey(0);
+     
      imshow(title, cdst);*/
     dice = image;
     p1 = 100;
@@ -279,15 +226,22 @@ void detectClock(string title, Mat image) {
             {
                 int area = floodFill(canny, Point(x,y), CV_RGB(0,0,160));
                 printf("filling %d, %d gray, area is %d\n", x, y, area);
-                if(area>10 && area < 250) num++;
+                if(area>10 && area < 250) {
+                    addCluster(Point(x,y));
+                    num++;
+                }
             }
         }
+    }
+    
+    for(auto it = cluster.begin(); it != cluster.end(); it++) {
+        fprintf(stderr, "%lu\n", it->second.size());
     }
     printf("number is %d\n", num);
     imshow("dice", canny);
     waitKey();
-
-
+    
+    
 }
 
 
@@ -295,18 +249,18 @@ void detectClock(string title, Mat image) {
 
 int main(int argc, char** argv)
 {
-
+    
     traverseImages("./test");
     
     for (auto it = imageMap.begin(); it != imageMap.end(); ++it) {
-	detectClock(it->first, it->second);
+        detectClock(it->first, it->second);
     }
-
+    
     //fprintf(stderr, "%f\n", atan2(1, 0));
-
-
+    
+    
     waitKey();
-
+    
     return 0;
 }
 
