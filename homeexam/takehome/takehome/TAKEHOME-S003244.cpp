@@ -19,7 +19,7 @@ using namespace std;
 
 struct mapPointComparator {
     bool operator()(const Rect& a, const Rect& b) const {
-        return a.x < b.x || a.y < b.y;
+        return a.x + a.y + a.width + a.height < b.x + b.y + b.width + b.height;
     }
 };
 
